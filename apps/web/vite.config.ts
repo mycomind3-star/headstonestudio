@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      "@headstone/agent": fileURLToPath(
+        new URL("../../packages/agent/src/index.ts", import.meta.url),
+      ),
       "@headstone/core": fileURLToPath(
         new URL("../../packages/core/src/index.ts", import.meta.url),
       ),

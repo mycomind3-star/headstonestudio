@@ -5,6 +5,7 @@
     "noEmit": true,
     "types": ["vite/client"],
     "paths": {
+      "@headstone/agent": ["../../packages/agent/src/index.ts"],
       "@headstone/core": ["../../packages/core/src/index.ts"],
       "@headstone/schema": ["../../packages/schema/src/index.ts"]
     }

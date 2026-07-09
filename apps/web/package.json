@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@headstone/agent": "file:../../packages/agent",
     "@headstone/core": "file:../../packages/core",
     "@headstone/schema": "file:../../packages/schema",
     "react": "^19.0.0",

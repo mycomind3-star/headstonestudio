@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { analyzeDesignDraft } from "@headstone/agent";
 import {
   createDraft,
   recoverDraftAutosave,
@@ -58,6 +59,10 @@ export function App() {
   const [autosaveStatus, setAutosaveStatus] = useState(() =>
     formatAutosaveStatus("idle", "Loading draft..."),
   );
+  const agentResponse = analyzeDesignDraft({
+    mode: "family_guidance",
+    draft,
+  });
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -111,43 +116,88 @@ export function App() {
         </p>
       </section>
 
-      <section className="card">
-        <div className={`status-pill status-${autosaveStatus.tone}`}>
-          {autosaveStatus.message}
-        </div>
-        <h2>{draft.title}</h2>
-        <p>
-          Status: <strong>{draft.status}</strong>
-          {" · "}
-          Versions: <strong>{draft.versions.length}</strong>
-        </p>
-        <p>
-          {draft.design_document.face.shape} on {draft.design_document.face.material}
-        </p>
-        {autosaveStatus.tone === "error" ? (
-          <p className="error-copy">{autosaveStatus.message}</p>
-        ) : null}
-      </section>
+      <div className="workspace-grid">
+        <section className="workspace-column">
+          <section className="card">
+            <div className={`status-pill status-${autosaveStatus.tone}`}>
+              {autosaveStatus.message}
+            </div>
+            <h2>{draft.title}</h2>
+            <p>
+              Status: <strong>{draft.status}</strong>
+              {" · "}
+              Versions: <strong>{draft.versions.length}</strong>
+            </p>
+            <p>
+              {draft.design_document.face.shape} on {draft.design_document.face.material}
+            </p>
+            {autosaveStatus.tone === "error" ? (
+              <p className="error-copy">{autosaveStatus.message}</p>
+            ) : null}
+          </section>
 
-      <section className="card">
-        <h2>Sample memorial drafts</h2>
-        <p>
-          These seed documents let the workspace prove draft recovery without a
-          canvas editor.
-        </p>
-        <div className="button-row">
-          {sampleDrafts.map((sample, index) => (
-            <button
-              key={sample.title}
-              type="button"
-              className="sample-button"
-              onClick={() => replaceDraft(index)}
-            >
-              {sample.title}
-            </button>
-          ))}
-        </div>
-      </section>
+          <section className="card">
+            <h2>Sample memorial drafts</h2>
+            <p>
+              These seed documents let the workspace prove draft recovery without a
+              canvas editor.
+            </p>
+            <div className="button-row">
+              {sampleDrafts.map((sample, index) => (
+                <button
+                  key={sample.title}
+                  type="button"
+                  className="sample-button"
+                  onClick={() => replaceDraft(index)}
+                >
+                  {sample.title}
+                </button>
+              ))}
+            </div>
+          </section>
+        </section>
+
+        <aside className="guide-panel">
+          <p className="eyebrow">Design Guide</p>
+          <h2>Calm, deterministic guidance</h2>
+          <p className="guide-summary">{agentResponse.summary}</p>
+
+          <section className="guide-section">
+            <h3>Findings</h3>
+            {agentResponse.findings.length === 0 ? (
+              <p>No concerns right now.</p>
+            ) : (
+              <ul className="guide-list">
+                {agentResponse.findings.map((finding) => (
+                  <li key={finding.id} className={`finding finding-${finding.severity}`}>
+                    <div className="finding-title">
+                      <span>{finding.title}</span>
+                      <span className="finding-severity">{finding.severity}</span>
+                    </div>
+                    <p>{finding.message}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="guide-section">
+            <h3>Next actions</h3>
+            {agentResponse.suggested_actions.length === 0 ? (
+              <p>No follow-up action is needed yet.</p>
+            ) : (
+              <ol className="action-list">
+                {agentResponse.suggested_actions.map((action) => (
+                  <li key={action.id} className="action-item">
+                    <strong>{action.label}</strong>
+                    <p>{action.description}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        </aside>
+      </div>
     </main>
   );
 }

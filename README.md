@@ -6,6 +6,7 @@ Monorepo foundation for the headstone design studio described in [docs/SPEC.md](
 
 - `apps/web` - minimal Vite shell for the future editor and customer experience
 - `apps/api` - backend scaffold only
+- `packages/agent` - deterministic Design Guide Agent helpers and findings
 - `packages/core` - draft/version domain contract, validation, and autosave helpers
 - `packages/schema` - shared `design_document` schema, fixtures, and validation tests
 
@@ -95,3 +96,14 @@ When the database layer is added, it should adapt to the same core contract inst
 - Draft rows should store the same `design_document` shape.
 - Version rows should snapshot the full design document exactly as the core contract creates it.
 - Autosave recovery and server-side persistence should both rely on the same validation rules.
+
+## Design Guide Agent
+
+The web shell now includes a small deterministic Design Guide panel powered by `packages/agent`.
+
+- It reads the current saved draft and returns calm, rule-based guidance.
+- It is intentionally not an LLM or a chatbot.
+- It validates the draft before analysis and never mutates the input.
+- It can surface findings, next actions, and gentle wording suggestions without approving production work.
+
+Later, an LLM can be plugged behind the same `AgentResponse` shape without changing the web UI contract. The browser should still treat the agent as advisory only: it can help people review a design, but it does not write draft data or approve production files.
