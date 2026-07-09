@@ -4,10 +4,11 @@ Monorepo foundation for the headstone design studio described in [docs/SPEC.md](
 
 ## Workspace layout
 
-- `apps/web` - minimal Vite shell for the future editor and customer experience
+- `apps/web` - minimal Vite editor shell and live SVG preview
 - `apps/api` - backend scaffold only
 - `packages/agent` - deterministic Design Guide Agent helpers and findings
 - `packages/core` - draft/version domain contract, validation, and autosave helpers
+- `packages/render` - deterministic SVG renderer for memorial design previews
 - `packages/schema` - shared `design_document` schema, fixtures, and validation tests
 
 ## Run
@@ -54,8 +55,19 @@ All memorial design data should flow through `packages/schema/src/designDocument
 - Add a fixture in `packages/schema/src/fixtures.ts` for the new design case.
 - Add or update validation tests in `packages/schema/src/designDocument.test.ts`.
 - Keep the web shell and later app features consuming the shared schema package instead of redefining local shapes.
+- If the preview needs a new element type or layout rule, update `packages/render/src/render.ts` and add a render test there too.
 
 The shared schema is intentionally strict. Unknown keys are rejected so future canvas, pricing, proof, and export code can trust the document shape.
+
+## Render preview
+
+`packages/render` turns a validated `design_document` into deterministic SVG for the editor preview.
+
+- The SVG uses the document's real dimensions and explicit units.
+- Safe margins are visible in preview mode so the editor stays honest about layout.
+- Text, symbols, photo etch placeholders, borders, and custom art placeholders all come from the shared schema.
+- Rendering is deterministic: the same document always produces the same SVG string.
+- Rendering is preview-only for now. Production SVG, DXF, and PDF output will later reuse this same render layer on the server side, but that export pipeline is intentionally not built yet.
 
 ## Draft lifecycle
 
@@ -99,11 +111,10 @@ When the database layer is added, it should adapt to the same core contract inst
 
 ## Design Guide Agent
 
-The web shell now includes a small deterministic Design Guide panel powered by `packages/agent`.
+`packages/agent` is available as a deterministic, rule-based advisory layer.
 
-- It reads the current saved draft and returns calm, rule-based guidance.
-- It is intentionally not an LLM or a chatbot.
+- It reads a draft and returns calm, practical guidance.
 - It validates the draft before analysis and never mutates the input.
-- It can surface findings, next actions, and gentle wording suggestions without approving production work.
+- It is advisory only and does not approve production work.
 
-Later, an LLM can be plugged behind the same `AgentResponse` shape without changing the web UI contract. The browser should still treat the agent as advisory only: it can help people review a design, but it does not write draft data or approve production files.
+Later, an LLM can be plugged behind the same `AgentResponse` shape without changing the rest of the app contract. The browser should still treat any agent output as guidance, not as a source of truth for draft edits or production approval.
