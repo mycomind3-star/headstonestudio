@@ -60,3 +60,54 @@ body {
   box-shadow: 0 18px 48px rgba(67, 48, 36, 0.08);
   backdrop-filter: blur(12px);
 }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.82rem;
+  margin-bottom: 1rem;
+}
+
+.status-idle,
+.status-saved {
+  background: rgba(115, 139, 106, 0.16);
+  color: #304128;
+}
+
+.status-restored {
+  background: rgba(96, 121, 138, 0.16);
+  color: #234055;
+}
+
+.status-error {
+  background: rgba(153, 96, 96, 0.14);
+  color: #6c2f2f;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.sample-button {
+  border: 1px solid rgba(77, 55, 41, 0.16);
+  border-radius: 999px;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sample-button:hover {
+  background: #fff;
+}
+
+.error-copy {
+  color: #7c3030;
+}

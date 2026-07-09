@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build --workspace @headstone/schema && npm run build --workspace @headstone/api && npm run build --workspace @headstone/web",
-    "test": "npm run test --workspace @headstone/schema",
-    "typecheck": "npm run typecheck --workspace @headstone/schema && npm run typecheck --workspace @headstone/api && npm run typecheck --workspace @headstone/web",
+    "build": "npm run build --workspace @headstone/schema && npm run build --workspace @headstone/core && npm run build --workspace @headstone/api && npm run build --workspace @headstone/web",
+    "test": "npm run test --workspace @headstone/schema && npm run test --workspace @headstone/core",
+    "typecheck": "npm run typecheck --workspace @headstone/schema && npm run typecheck --workspace @headstone/core && npm run typecheck --workspace @headstone/api && npm run typecheck --workspace @headstone/web",
     "lint": "npm run typecheck"
   },
   "devDependencies": {

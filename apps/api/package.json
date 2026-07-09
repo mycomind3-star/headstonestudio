@@ -5,5 +5,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@headstone/core": "file:../../packages/core",
+    "@headstone/schema": "file:../../packages/schema"
   }
 }

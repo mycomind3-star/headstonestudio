@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
-    "rootDir": "src",
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true
+    "paths": {
+      "@headstone/core": ["../../packages/core/src/index.ts"],
+      "@headstone/schema": ["../../packages/schema/src/index.ts"]
+    }
   },
   "include": ["src"]
 }
