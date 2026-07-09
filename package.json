@@ -1,0 +1,25 @@
+{
+  "name": "headstone-design-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @headstone/schema && npm run build --workspace @headstone/api && npm run build --workspace @headstone/web",
+    "test": "npm run test --workspace @headstone/schema",
+    "typecheck": "npm run typecheck --workspace @headstone/schema && npm run typecheck --workspace @headstone/api && npm run typecheck --workspace @headstone/web",
+    "lint": "npm run typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
+    "vitest": "^4.1.10"
+  }
+}
