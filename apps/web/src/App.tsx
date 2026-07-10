@@ -30,6 +30,7 @@ import {
   type ProofVersionDiffField,
   type ProofVersionDiffItem,
 } from "@headstone/core";
+import { createProofDocument, type ProofDocument, type ProofDocumentSection } from "@headstone/proof";
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTemplateIndex, getTemplateTitle, memorialTemplates } from "./editorModel";
@@ -109,6 +110,76 @@ interface ApprovalDraft {
     epitaph_reviewed: boolean;
     understands_not_production_approval: boolean;
   };
+}
+
+function renderProofDocumentSection(section: ProofDocumentSection) {
+  if (section.kind === "preview") {
+    return (
+      <section key={section.id} className="proof-document-section proof-document-preview">
+        <div className="proof-document-section-header">
+          <div>
+            <p className="panel-kicker">{section.title}</p>
+            {section.summary ? <h4>{section.summary}</h4> : null}
+          </div>
+        </div>
+        <div
+          className="proof-document-svg"
+          aria-label="Printable memorial proof preview"
+          dangerouslySetInnerHTML={{ __html: section.content ?? "" }}
+        />
+      </section>
+    );
+  }
+
+  if (section.kind === "transcript") {
+    return (
+      <section key={section.id} className="proof-document-section">
+        <div className="proof-document-section-header">
+          <div>
+            <p className="panel-kicker">{section.title}</p>
+            {section.summary ? <h4>{section.summary}</h4> : null}
+          </div>
+        </div>
+        <pre className="proof-document-transcript">{section.content ?? ""}</pre>
+      </section>
+    );
+  }
+
+  if (section.kind === "warnings" || section.kind === "checklist") {
+    return (
+      <section key={section.id} className="proof-document-section">
+        <div className="proof-document-section-header">
+          <div>
+            <p className="panel-kicker">{section.title}</p>
+            {section.summary ? <h4>{section.summary}</h4> : null}
+          </div>
+        </div>
+        <ul className="proof-document-list">
+          {section.items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
+  return (
+    <section key={section.id} className="proof-document-section">
+      <div className="proof-document-section-header">
+        <div>
+          <p className="panel-kicker">{section.title}</p>
+          {section.summary ? <h4>{section.summary}</h4> : null}
+        </div>
+      </div>
+      {section.items.length > 0 ? (
+        <ul className="proof-document-list">
+          {section.items.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
 }
 
 const findingFocusMap: Record<string, ReviewFocusAction | null> = {
@@ -245,6 +316,7 @@ export function App() {
   const [approvalDraft, setApprovalDraft] = useState<ApprovalDraft>(() => createDefaultApprovalDraft());
   const [revocationReasons, setRevocationReasons] = useState<Record<string, string>>({});
   const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
+  const [proofVersionId, setProofVersionId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
     template: null,
     name: null,
@@ -396,6 +468,9 @@ export function App() {
   const latestProofVersionNumber = latestProofVersion?.version_number ?? null;
   const proofVersions = [...draft.versions].reverse();
   const canCreateProofVersion = draft.status !== "production_locked" && draft.status !== "archived";
+  const selectedProofVersion = proofVersionId
+    ? draft.versions.find((version) => version.id === proofVersionId) ?? latestProofVersion
+    : latestProofVersion;
   const latestVersionApprovals = latestProofVersion
     ? listApprovalsForVersion(approvalRecords, latestProofVersion.id)
     : [];
@@ -417,6 +492,73 @@ export function App() {
   const comparisonTitle = comparisonVersion
     ? `Changes between ${formatVersionLabel(comparisonVersion)} and the latest proof`
     : "Changes since latest proof";
+  const proofDocumentSignature = useMemo(() => {
+    if (!selectedProofVersion) {
+      return "no-proof-version";
+    }
+
+    const noteSignature = reviewNotes.map((note) => `${note.id}:${note.status}:${note.updatedAt}`).join("|");
+    const approvalSignature = approvalRecords
+      .map((record) => `${record.id}:${record.status}:${record.approvedAt}:${record.revokedAt ?? ""}`)
+      .join("|");
+
+    return [
+      selectedProofVersion.id,
+      selectedProofVersion.version_number,
+      noteSignature,
+      approvalSignature,
+    ].join("::");
+  }, [
+    approvalRecords,
+    reviewNotes,
+    selectedProofVersion?.id,
+    selectedProofVersion?.version_number,
+  ]);
+  const [proofDocumentCreatedAt, setProofDocumentCreatedAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (latestProofVersion === null) {
+      if (proofVersionId !== null) {
+        setProofVersionId(null);
+      }
+      return;
+    }
+
+    const selectedVersionExists = proofVersionId !== null && draft.versions.some((version) => version.id === proofVersionId);
+    if (!selectedVersionExists) {
+      setProofVersionId(latestProofVersion.id);
+    }
+  }, [draft.versions, latestProofVersion, proofVersionId]);
+
+  const proofDocument = useMemo<ProofDocument | null>(() => {
+    if (!selectedProofVersion) {
+      return null;
+    }
+
+    const proofReviewNotes = listReviewNotesForVersion(reviewNotes, selectedProofVersion.id);
+    const proofApprovals = listApprovalsForVersion(approvalRecords, selectedProofVersion.id);
+    const proofSvg = renderDesignDocumentToSvg(selectedProofVersion.design_document);
+
+    return createProofDocument({
+      proofVersion: selectedProofVersion,
+      designDocument: selectedProofVersion.design_document,
+      renderedSvg: proofSvg,
+      familyApprovalRecords: proofApprovals,
+      reviewNotes: proofReviewNotes,
+      diffSummary: comparisonDiff?.summary ?? null,
+      createdAt: proofDocumentCreatedAt ?? selectedProofVersion.created_at,
+      createdByLabel: "Local reviewer",
+    });
+  }, [approvalRecords, comparisonDiff?.summary, proofDocumentCreatedAt, reviewNotes, selectedProofVersion]);
+
+  useEffect(() => {
+    if (!selectedProofVersion) {
+      setProofDocumentCreatedAt(null);
+      return;
+    }
+
+    setProofDocumentCreatedAt(new Date().toISOString());
+  }, [proofDocumentSignature]);
 
   function focusTarget(target: FocusTarget) {
     const element = fieldRefs.current[target];
@@ -673,6 +815,10 @@ export function App() {
         updated_at: now,
       });
     });
+  }
+
+  function printProofDocument() {
+    window.print();
   }
 
   return (
@@ -1457,6 +1603,127 @@ export function App() {
                     );
                   })}
                 </div>
+              )}
+            </section>
+
+            <section className="proof-document-panel">
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">Proof document</p>
+                  <h4>{proofDocument?.title ?? "Memorial Design Proof"}</h4>
+                </div>
+                <p className="guide-note">Family review only</p>
+              </div>
+
+              <p className="guide-summary">
+                This printable proof uses one saved proof version snapshot. It stays separate from production approval.
+              </p>
+
+              {proofVersions.length > 0 ? (
+                <div className="proof-document-controls">
+                  <label className="field" htmlFor="proof-version-select">
+                    <span>Proof version</span>
+                    <select
+                      id="proof-version-select"
+                      value={selectedProofVersion?.id ?? ""}
+                      onChange={(event) => setProofVersionId(event.target.value)}
+                    >
+                      {proofVersions.map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {formatVersionLabel(version)} · {new Date(version.created_at).toLocaleString()}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="proof-document-actions">
+                    <p className="version-meta">
+                      Suggested file name: <strong>{proofDocument?.fileName ?? "proof.pdf"}</strong>
+                    </p>
+                    <button
+                      type="button"
+                      className="proof-button"
+                      onClick={printProofDocument}
+                      disabled={proofDocument === null}
+                    >
+                      Print / Save as PDF
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="guide-empty">Create a proof version to prepare a printable review copy.</p>
+              )}
+
+              {proofDocument ? (
+                <article className="proof-document-page">
+                  <header className="proof-document-header">
+                    <div className="proof-document-header-copy">
+                      <p className="panel-kicker">Memorial Design Proof</p>
+                      <h4>{proofDocument.metadata.memorialName}</h4>
+                      <p className="version-meta">
+                        Proof version <strong>{proofDocument.metadata.proofVersionId}</strong> ·{" "}
+                        {proofDocument.metadata.proofVersionLabel} · Generated {proofDocument.metadata.generatedAtLabel}
+                      </p>
+                      <p className="version-meta">
+                        Suggested file name: <strong>{proofDocument.fileName}</strong>
+                      </p>
+                    </div>
+
+                    <dl className="proof-document-meta-grid">
+                      <div>
+                        <dt>Version ID</dt>
+                        <dd>{proofDocument.metadata.proofVersionId}</dd>
+                      </div>
+                      <div>
+                        <dt>Version time</dt>
+                        <dd>{proofDocument.metadata.proofVersionCreatedAtLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Generated</dt>
+                        <dd>{proofDocument.metadata.generatedAtLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Dimensions</dt>
+                        <dd>{proofDocument.metadata.dimensionsLabel}</dd>
+                      </div>
+                      <div>
+                        <dt>Material</dt>
+                        <dd>{proofDocument.metadata.material}</dd>
+                      </div>
+                      <div>
+                        <dt>Finish</dt>
+                        <dd>{proofDocument.metadata.finish}</dd>
+                      </div>
+                    </dl>
+                  </header>
+
+                  <section className="proof-document-summary">
+                    <div className="proof-document-summary-grid">
+                      <div>
+                        <p className="guide-note">Memorial name</p>
+                        <p className="version-meta">{proofDocument.metadata.memorialName}</p>
+                      </div>
+                      <div>
+                        <p className="guide-note">Birth date</p>
+                        <p className="version-meta">{proofDocument.metadata.birthDateText ?? "Not entered yet"}</p>
+                      </div>
+                      <div>
+                        <p className="guide-note">Death date</p>
+                        <p className="version-meta">{proofDocument.metadata.deathDateText ?? "Not entered yet"}</p>
+                      </div>
+                      <div>
+                        <p className="guide-note">Epitaph</p>
+                        <p className="version-meta">{proofDocument.metadata.epitaphText ?? "Not entered yet"}</p>
+                      </div>
+                    </div>
+                  </section>
+
+                  {proofDocument.sections.map((section) => renderProofDocumentSection(section))}
+                </article>
+              ) : (
+                <p className="guide-empty">
+                  No printable proof is available yet. Save a proof version first, then pick it here for review.
+                </p>
               )}
             </section>
 

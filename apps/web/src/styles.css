@@ -709,6 +709,137 @@ select {
   line-height: 1.5;
 }
 
+.proof-document-panel {
+  border-top: 1px solid rgba(77, 55, 41, 0.1);
+  padding-top: 0.8rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.proof-document-controls {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.proof-document-actions {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.proof-document-page {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 1rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.proof-document-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.proof-document-header-copy h4,
+.proof-document-section-header h4 {
+  margin: 0.15rem 0 0;
+}
+
+.proof-document-meta-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 0.85rem;
+}
+
+.proof-document-meta-grid div {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(250, 247, 242, 0.9);
+  padding: 0.65rem 0.75rem;
+}
+
+.proof-document-meta-grid dt {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7b6555;
+}
+
+.proof-document-meta-grid dd {
+  margin: 0.25rem 0 0;
+  color: #4a3c33;
+  line-height: 1.45;
+}
+
+.proof-document-summary {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.88);
+  padding: 0.9rem 0.95rem;
+}
+
+.proof-document-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+}
+
+.proof-document-section {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0.9rem 0.95rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.proof-document-section-header {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.proof-document-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.45rem;
+  color: #594c43;
+  line-height: 1.5;
+}
+
+.proof-document-transcript {
+  margin: 0;
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(250, 247, 242, 0.94);
+  padding: 0.85rem 0.95rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  color: #4d4037;
+}
+
+.proof-document-preview {
+  align-items: center;
+}
+
+.proof-document-svg {
+  width: 100%;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+}
+
+.proof-document-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
 @media (max-width: 980px) {
   .studio-header,
   .preview-header {
@@ -735,5 +866,95 @@ select {
   .family-approval-grid,
   .approval-ack-list-compact {
     grid-template-columns: 1fr;
+  }
+
+  .proof-document-header,
+  .proof-document-summary-grid,
+  .proof-document-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.5in;
+  }
+
+  :root,
+  body {
+    background: #ffffff !important;
+  }
+
+  body {
+    color: #1f1915 !important;
+  }
+
+  .studio-shell {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+
+  .studio-header,
+  .editor-panel,
+  .guide-panel,
+  .proof-history-panel,
+  .preview-stage,
+  .preview-footnote,
+  .support-note,
+  .status-pill,
+  .proof-actions,
+  .proof-toast,
+  .guide-empty,
+  .guide-more,
+  .proof-document-controls .proof-button,
+  .guide-focus-button {
+    display: none !important;
+  }
+
+  .preview-panel {
+    border: none;
+    box-shadow: none;
+    backdrop-filter: none;
+    background: #ffffff;
+    padding: 0;
+    gap: 0.8rem;
+  }
+
+  .preview-panel > :not(.proof-document-panel) {
+    display: none !important;
+  }
+
+  .proof-document-panel {
+    border: none;
+    padding-top: 0;
+    gap: 0.7rem;
+  }
+
+  .proof-document-page {
+    border: none;
+    border-radius: 0;
+    background: #ffffff;
+    padding: 0;
+    gap: 0.8rem;
+  }
+
+  .proof-document-section,
+  .proof-document-summary,
+  .proof-document-meta-grid div,
+  .proof-document-transcript {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    background: #ffffff;
+  }
+
+  .proof-document-transcript {
+    overflow: visible;
+  }
+
+  .proof-document-svg svg {
+    max-width: 100%;
   }
 }

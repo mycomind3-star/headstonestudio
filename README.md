@@ -8,6 +8,7 @@ Monorepo foundation for the headstone design studio described in [docs/SPEC.md](
 - `apps/api` - backend scaffold only
 - `packages/agent` - deterministic Design Guide Agent helpers and findings
 - `packages/core` - draft/version domain contract, validation, and autosave helpers
+- `packages/proof` - printable proof document model built from proof versions and SVG
 - `packages/render` - deterministic SVG renderer for memorial design previews
 - `packages/schema` - shared `design_document` schema, fixtures, and validation tests
 
@@ -121,6 +122,17 @@ The editor can compare the current draft against the latest proof version, or co
 - Comparison is for review and audit history, not for approval.
 - A comparison result never mutates the draft, creates a version, or changes approval status.
 
+## Proof documents
+
+`packages/proof` builds a printable proof document from a selected proof version snapshot, the deterministic SVG render, and the local review records.
+
+- The proof document always uses the saved proof version snapshot, not the mutable working draft.
+- The proof page includes proof-only warnings, a memorial text transcript, a review checklist, and optional approval/review summaries.
+- The first implementation is browser print / save as PDF through `window.print()`.
+- The proof page is clearly labeled as review-only and not production approval.
+
+This is the first step toward server-side PDF generation. A future PDF service should consume the same `ProofDocument` model instead of inventing a new proof shape.
+
 ## Review notes
 
 Local review notes can be attached to proof versions and, when useful, to specific diff items.
@@ -174,3 +186,11 @@ The web editor now combines manual memorial field editing, deterministic SVG pre
 - Guide findings can now focus the related editor field for quick review.
 - It helps surface calm findings, next actions, and wording notes, but it does not approve production files.
 - Those focus actions are navigational only and never mutate the draft.
+
+## Printable proof workflow
+
+The visual editor also includes a local proof document view for the selected proof version.
+
+- The proof document uses the same `design_document` snapshot and deterministic SVG preview as the editor.
+- It can be printed or saved as PDF through the browser, but it is still a proof-only review artifact.
+- The proof document is advisory and does not approve the draft or create production files.
