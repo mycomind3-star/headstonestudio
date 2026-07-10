@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { analyzeDesignDraft } from "@headstone/agent";
 import { createDraft, recoverDraftAutosave, serializeDraftAutosave, updateDraft, type DesignDraft } from "@headstone/core";
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTemplateIndex, getTemplateTitle, memorialTemplates } from "./editorModel";
@@ -65,6 +66,19 @@ export function App() {
   const templateIndex = getTemplateIndex(draft.design_document);
   const editorFields = getEditableFields(draft.design_document);
   const previewSvg = renderDesignDocumentToSvg(draft.design_document);
+  const agentResponse = useMemo(
+    () =>
+      analyzeDesignDraft({
+        mode: "family_guidance",
+        draft,
+      }),
+    [draft],
+  );
+  const visibleFindings = agentResponse.findings.slice(0, 4);
+  const visibleActions = agentResponse.suggested_actions.slice(0, 3);
+  const visibleAdvice = agentResponse.advice.slice(0, 2);
+  const hiddenFindingCount = Math.max(0, agentResponse.findings.length - visibleFindings.length);
+  const hiddenActionCount = Math.max(0, agentResponse.suggested_actions.length - visibleActions.length);
 
   function updateField(field: EditableFieldKey, value: string) {
     const now = new Date().toISOString();
@@ -221,6 +235,79 @@ export function App() {
             This is a working design draft only. The production export will come later from the same
             shared document and render layer.
           </p>
+
+          <section className="guide-panel">
+            <div className="guide-header">
+              <div>
+                <p className="panel-kicker">Design Guide</p>
+                <h3>Calm guidance</h3>
+              </div>
+              <p className="guide-note">Read only</p>
+            </div>
+
+            <p className="guide-summary">{agentResponse.summary}</p>
+
+            <section className="guide-section">
+              <h4>Findings</h4>
+              {visibleFindings.length === 0 ? (
+                <p className="guide-empty">No immediate concerns.</p>
+              ) : (
+                <ul className="guide-list">
+                  {visibleFindings.map((finding) => (
+                    <li key={finding.id} className={`guide-card guide-card-${finding.severity}`}>
+                      <div className="guide-card-top">
+                        <strong>{finding.title}</strong>
+                        <span className="severity-pill">{finding.severity}</span>
+                      </div>
+                      <p>{finding.message}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {hiddenFindingCount > 0 ? (
+                <p className="guide-more">
+                  Showing the first {visibleFindings.length} of {agentResponse.findings.length} items.
+                </p>
+              ) : null}
+            </section>
+
+            <section className="guide-section">
+              <h4>Next actions</h4>
+              {visibleActions.length === 0 ? (
+                <p className="guide-empty">No follow-up action is needed yet.</p>
+              ) : (
+                <ol className="action-list">
+                  {visibleActions.map((action) => (
+                    <li key={action.id} className="action-card">
+                      <strong>{action.label}</strong>
+                      <p>{action.description}</p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {hiddenActionCount > 0 ? (
+                <p className="guide-more">
+                  Showing the first {visibleActions.length} of {agentResponse.suggested_actions.length} actions.
+                </p>
+              ) : null}
+            </section>
+
+            <section className="guide-section">
+              <h4>Wording guidance</h4>
+              {visibleAdvice.length === 0 ? (
+                <p className="guide-empty">No wording note is needed right now.</p>
+              ) : (
+                <ul className="guide-list">
+                  {visibleAdvice.map((item) => (
+                    <li key={item.id} className="advice-card">
+                      <strong>{item.title}</strong>
+                      <p>{item.message}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </section>
         </section>
       </section>
     </main>

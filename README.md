@@ -118,3 +118,12 @@ When the database layer is added, it should adapt to the same core contract inst
 - It is advisory only and does not approve production work.
 
 Later, an LLM can be plugged behind the same `AgentResponse` shape without changing the rest of the app contract. The browser should still treat any agent output as guidance, not as a source of truth for draft edits or production approval.
+
+## Editor workspace
+
+The web editor now combines manual memorial field editing, deterministic SVG preview, autosave, and deterministic Design Guide feedback in one workspace.
+
+- Editing the memorial fields updates the shared `design_document`.
+- The preview stays deterministic so the same draft always renders the same way.
+- The guide panel is read-only and advisory only.
+- It helps surface calm findings, next actions, and wording notes, but it does not approve production files.

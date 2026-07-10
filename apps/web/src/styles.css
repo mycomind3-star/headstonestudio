@@ -235,6 +235,114 @@ select {
   font-size: 0.95rem;
 }
 
+.guide-panel {
+  border-top: 1px solid rgba(77, 55, 41, 0.1);
+  padding-top: 0.8rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.guide-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: end;
+  gap: 1rem;
+}
+
+.guide-header h3,
+.guide-section h4 {
+  margin: 0;
+}
+
+.guide-note {
+  margin: 0;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  background: rgba(144, 122, 103, 0.14);
+  color: #5c4b3f;
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+
+.guide-summary {
+  margin: 0;
+  line-height: 1.55;
+  color: #4e4138;
+}
+
+.guide-section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.guide-list,
+.action-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.guide-card,
+.action-card,
+.advice-card {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.guide-card p,
+.action-card p,
+.advice-card p {
+  margin: 0.35rem 0 0;
+  line-height: 1.5;
+  color: #594c43;
+}
+
+.guide-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.severity-pill {
+  border-radius: 999px;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  background: rgba(144, 122, 103, 0.14);
+  color: #5c4b3f;
+  white-space: nowrap;
+}
+
+.guide-card-info {
+  border-color: rgba(96, 121, 138, 0.22);
+}
+
+.guide-card-suggestion {
+  border-color: rgba(115, 139, 106, 0.22);
+}
+
+.guide-card-warning {
+  border-color: rgba(168, 123, 61, 0.22);
+}
+
+.guide-card-blocker {
+  border-color: rgba(153, 96, 96, 0.24);
+}
+
+.guide-empty,
+.guide-more {
+  margin: 0;
+  color: #6a5b51;
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
 @media (max-width: 980px) {
   .studio-header,
   .preview-header {
