@@ -8,6 +8,7 @@ Monorepo foundation for the headstone design studio described in [docs/SPEC.md](
 - `apps/api` - backend scaffold only
 - `packages/agent` - deterministic Design Guide Agent helpers and findings
 - `packages/core` - draft/version domain contract, validation, and autosave helpers
+- `packages/export` - local SVG export candidate package built from proof versions
 - `packages/proof` - printable proof document model built from proof versions and SVG
 - `packages/render` - deterministic SVG renderer for memorial design previews
 - `packages/schema` - shared `design_document` schema, fixtures, and validation tests
@@ -132,6 +133,18 @@ The editor can compare the current draft against the latest proof version, or co
 - The proof page is clearly labeled as review-only and not production approval.
 
 This is the first step toward server-side PDF generation. A future PDF service should consume the same `ProofDocument` model instead of inventing a new proof shape.
+
+## Laser/vector export candidate
+
+`packages/export` turns a selected proof version snapshot into a local SVG export candidate package.
+
+- The export uses the immutable proof version snapshot, not the mutable working draft.
+- The package includes the SVG candidate, `design_document` JSON, a manifest, a transcript, and warning text.
+- It is explicitly labeled as an export candidate and is not certified production-ready.
+- The export helper keeps DXF and laser-specific machine validation out of this phase on purpose.
+- The web UI can download the files locally, which helps staff start a laser/engraving workflow without pretending the file is ready for production.
+
+A future production export service should reuse the same export contract and proof-version snapshot rules, then add machine-specific validation on the server side.
 
 ## Review notes
 

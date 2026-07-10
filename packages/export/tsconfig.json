@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@headstone/core": ["../core/src/index.ts"],
+      "@headstone/proof": ["../proof/src/index.ts"],
+      "@headstone/render": ["../render/src/index.ts"],
+      "@headstone/schema": ["../schema/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

@@ -42,6 +42,12 @@ import {
   type VendorProductionReview,
   type VendorProductionReviewChecklistKey,
 } from "@headstone/core";
+import {
+  createExportFileName,
+  createSvgExportCandidate,
+  exportCandidateWarningMessages,
+  type ExportCandidateFile,
+} from "@headstone/export";
 import { createProofDocument, type ProofDocument, type ProofDocumentSection } from "@headstone/proof";
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -105,6 +111,11 @@ interface ReviewNoteToast {
 }
 
 interface VendorReviewToast {
+  tone: "idle" | "saved" | "error";
+  message: string;
+}
+
+interface ExportToast {
   tone: "idle" | "saved" | "error";
   message: string;
 }
@@ -379,6 +390,45 @@ function getReviewActionForFinding(finding: AgentFinding): ReviewFocusAction | n
   return findingFocusMap[finding.id] ?? null;
 }
 
+function triggerDownload(file: ExportCandidateFile) {
+  const blob = new Blob([file.content], { type: file.mimeType });
+  const url = window.URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = file.downloadName ?? file.name;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.URL.revokeObjectURL(url);
+}
+
+function summarizeFamilyApprovalForExport(approvals: readonly ProofApprovalRecord[]): string | null {
+  if (approvals.length === 0) {
+    return null;
+  }
+
+  const activeCount = listActiveProofApprovals(approvals).length;
+  const revokedCount = approvals.length - activeCount;
+  const parts = [`${activeCount} active family approval${activeCount === 1 ? "" : "s"}`];
+
+  if (revokedCount > 0) {
+    parts.push(`${revokedCount} revoked`);
+  }
+
+  return parts.join(", ");
+}
+
+function summarizeVendorReviewForExport(review: VendorProductionReview | null): string | null {
+  if (!review) {
+    return null;
+  }
+
+  const status = vendorReviewStatusLabels[review.status];
+  const updatedAt = new Date(review.updatedAt).toLocaleString();
+  return `${status} · ${review.reviewedByLabel} · ${updatedAt}`;
+}
+
 export function App() {
   const [draft, setDraft] = useState<DesignDraft>(() => createWorkingDraft());
   const [hydrated, setHydrated] = useState(false);
@@ -414,6 +464,10 @@ export function App() {
   const [vendorReviewToast, setVendorReviewToast] = useState<VendorReviewToast>({
     tone: "idle",
     message: "Local vendor reviews stay with this browser.",
+  });
+  const [exportToast, setExportToast] = useState<ExportToast>({
+    tone: "idle",
+    message: "Local SVG export candidates stay on this device.",
   });
   const [vendorReviewVersionId, setVendorReviewVersionId] = useState<string | null>(null);
   const [vendorReviewRevocationReasons, setVendorReviewRevocationReasons] = useState<Record<string, string>>({});
@@ -716,6 +770,25 @@ export function App() {
 
     setProofDocumentCreatedAt(new Date().toISOString());
   }, [proofDocumentSignature]);
+
+  const selectedProofVersionApprovals = selectedProofVersion
+    ? listApprovalsForVersion(approvalRecords, selectedProofVersion.id)
+    : [];
+  const selectedProofVersionVendorReview = selectedProofVersion
+    ? getLatestVendorReviewForVersion(vendorReviews, selectedProofVersion.id)
+    : null;
+  const exportCandidateFileName = selectedProofVersion
+    ? createExportFileName({
+        selectedProofVersion,
+        designDocument: selectedProofVersion.design_document,
+        renderedSvg: proofDocument?.renderedSvg ?? renderDesignDocumentToSvg(selectedProofVersion.design_document),
+        proofDocumentMetadata: proofDocument?.metadata ?? null,
+        familyApprovalSummary: summarizeFamilyApprovalForExport(selectedProofVersionApprovals),
+        vendorReviewSummary: summarizeVendorReviewForExport(selectedProofVersionVendorReview),
+        createdAt: proofDocumentCreatedAt ?? selectedProofVersion.created_at,
+        createdByLabel: "Staff",
+      })
+    : null;
 
   function focusTarget(target: FocusTarget) {
     const element = fieldRefs.current[target];
@@ -1153,6 +1226,57 @@ export function App() {
         design_document: buildEditableDocument(nextIndex, currentFields),
         updated_at: now,
       });
+    });
+  }
+
+  function buildExportCandidatePackage() {
+    if (!selectedProofVersion || !proofDocument) {
+      setExportToast({
+        tone: "error",
+        message: "Create a proof version before exporting a local SVG candidate.",
+      });
+      return null;
+    }
+
+    try {
+      return createSvgExportCandidate({
+        selectedProofVersion,
+        designDocument: selectedProofVersion.design_document,
+        renderedSvg: proofDocument.renderedSvg,
+        proofDocumentMetadata: proofDocument.metadata,
+        familyApprovalSummary: summarizeFamilyApprovalForExport(selectedProofVersionApprovals),
+        vendorReviewSummary: summarizeVendorReviewForExport(selectedProofVersionVendorReview),
+        createdAt: new Date().toISOString(),
+        createdByLabel: "Staff",
+      });
+    } catch (error) {
+      setExportToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : "We could not prepare that export candidate.",
+      });
+      return null;
+    }
+  }
+
+  function downloadExportCandidateAsset(fileName: string) {
+    const candidate = buildExportCandidatePackage();
+    if (!candidate) {
+      return;
+    }
+
+    const file = candidate.files.find((entry) => entry.name === fileName);
+    if (!file) {
+      setExportToast({
+        tone: "error",
+        message: "We could not find that export file.",
+      });
+      return;
+    }
+
+    triggerDownload(file);
+    setExportToast({
+      tone: "saved",
+      message: `Downloaded ${file.downloadName ?? file.name}.`,
     });
   }
 
@@ -2310,6 +2434,71 @@ export function App() {
                 <p className="guide-empty">
                   No printable proof is available yet. Save a proof version first, then pick it here for review.
                 </p>
+              )}
+            </section>
+
+            <section className="export-candidate-panel">
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">Laser/vector export candidate</p>
+                  <h4>Local SVG export snapshot</h4>
+                </div>
+                <p className="guide-note">Export candidate only</p>
+              </div>
+
+              <p className="guide-summary">
+                This downloads the selected proof version as a local SVG candidate. It is not certified production-ready.
+              </p>
+
+              <ul className="export-warning-list">
+                {exportCandidateWarningMessages.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+
+              {exportToast.message ? <p className={`proof-toast proof-toast-${exportToast.tone}`}>{exportToast.message}</p> : null}
+
+              {proofVersions.length > 0 && selectedProofVersion && proofDocument ? (
+                <>
+                  <p className="version-meta">
+                    Suggested file name: <strong>{exportCandidateFileName ?? "memorial-design-candidate.svg"}</strong>
+                  </p>
+                  <div className="proof-actions export-candidate-actions">
+                    <button
+                      type="button"
+                      className="proof-button"
+                      onClick={() => downloadExportCandidateAsset("memorial-design-candidate.svg")}
+                    >
+                      Download SVG candidate
+                    </button>
+                    <button
+                      type="button"
+                      className="guide-focus-button"
+                      onClick={() => downloadExportCandidateAsset("manifest.json")}
+                    >
+                      Download manifest
+                    </button>
+                    <button
+                      type="button"
+                      className="guide-focus-button"
+                      onClick={() => downloadExportCandidateAsset("transcript.txt")}
+                    >
+                      Download transcript
+                    </button>
+                    <button
+                      type="button"
+                      className="guide-focus-button"
+                      onClick={() => downloadExportCandidateAsset("design-document.json")}
+                    >
+                      Download design JSON
+                    </button>
+                  </div>
+                  <p className="guide-more">
+                    Export files are built from the immutable proof snapshot. They do not change the draft or mark production complete.
+                  </p>
+                </>
+              ) : (
+                <p className="guide-empty">Create a proof version before exporting a local SVG candidate.</p>
               )}
             </section>
 

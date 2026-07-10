@@ -387,6 +387,28 @@ select {
   gap: 0.9rem;
 }
 
+.export-candidate-panel {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.export-warning-list {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.45rem;
+  color: #5d4f45;
+  line-height: 1.5;
+}
+
+.export-candidate-actions {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .family-approval-form {
   border: 1px solid rgba(77, 55, 41, 0.1);
   border-radius: 1rem;
@@ -944,7 +966,8 @@ select {
 
   .family-approval-grid,
   .vendor-review-checklist,
-  .approval-ack-list-compact {
+  .approval-ack-list-compact,
+  .export-candidate-actions {
     grid-template-columns: 1fr;
   }
 
@@ -989,6 +1012,7 @@ select {
   .proof-toast,
   .guide-empty,
   .guide-more,
+  .export-candidate-panel,
   .proof-document-controls .proof-button,
   .guide-focus-button {
     display: none !important;
