@@ -111,6 +111,16 @@ The editor can create local proof versions from the current draft.
 
 That storage shape is temporary. A future database-backed version store should preserve the same immutable snapshot contract and recovery rules instead of inventing a new version model.
 
+## Proof comparison
+
+The editor can compare the current draft against the latest proof version, or compare two proof versions against each other.
+
+- Name and date changes are treated as critical because they are the most important spelling and safety checks.
+- Epitaph changes are treated as important.
+- Shape, layout, and material changes are also surfaced as important review items.
+- Comparison is for review and audit history, not for approval.
+- A comparison result never mutates the draft, creates a version, or changes approval status.
+
 ## Future persistence
 
 When the database layer is added, it should adapt to the same core contract instead of inventing a new one.

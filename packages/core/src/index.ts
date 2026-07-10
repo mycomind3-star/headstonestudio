@@ -20,3 +20,12 @@ export {
   type DraftStatus,
   type UpdateDraftInput,
 } from "./domain";
+export {
+  compareDesignDocuments,
+  compareDesignVersions,
+  compareDraftToLatestVersion,
+  type ProofVersionDiff,
+  type ProofVersionDiffField,
+  type ProofVersionDiffItem,
+  type ProofVersionDiffSeverity,
+} from "./proofComparison";

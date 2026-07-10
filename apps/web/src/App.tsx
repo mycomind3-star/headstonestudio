@@ -2,6 +2,8 @@ import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
 import {
   createDraft,
   createVersion,
+  compareDesignVersions,
+  compareDraftToLatestVersion,
   recoverDraftAutosave,
   serializeDraftAutosave,
   updateDraft,
@@ -85,6 +87,7 @@ export function App() {
     tone: "idle",
     message: "Proof versions help preserve what was reviewed.",
   });
+  const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
     template: null,
     name: null,
@@ -160,9 +163,27 @@ export function App() {
   const visibleAdvice = agentResponse.advice.slice(0, 2);
   const hiddenFindingCount = Math.max(0, agentResponse.findings.length - visibleFindings.length);
   const hiddenActionCount = Math.max(0, agentResponse.suggested_actions.length - visibleActions.length);
-  const latestProofVersionNumber = draft.versions.at(-1)?.version_number ?? null;
+  const latestProofVersion = draft.versions.at(-1) ?? null;
+  const latestProofVersionNumber = latestProofVersion?.version_number ?? null;
   const proofVersions = [...draft.versions].reverse();
   const canCreateProofVersion = draft.status !== "production_locked" && draft.status !== "archived";
+  const comparisonVersion = comparisonVersionId
+    ? draft.versions.find((version) => version.id === comparisonVersionId) ?? null
+    : null;
+  const comparisonDiff = useMemo(() => {
+    if (!latestProofVersion) {
+      return null;
+    }
+
+    if (comparisonVersion) {
+      return compareDesignVersions(comparisonVersion, latestProofVersion);
+    }
+
+    return compareDraftToLatestVersion(draft);
+  }, [comparisonVersion, draft, latestProofVersion]);
+  const comparisonTitle = comparisonVersion
+    ? `Changes between ${formatVersionLabel(comparisonVersion)} and the latest proof`
+    : "Changes since latest proof";
 
   function focusTarget(target: FocusTarget) {
     const element = fieldRefs.current[target];
@@ -509,6 +530,65 @@ export function App() {
               <p className="guide-note">Snapshot review only</p>
             </div>
 
+            <section className="proof-diff-panel">
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">What changed</p>
+                  <h4>{comparisonTitle}</h4>
+                </div>
+                {comparisonVersion ? (
+                  <button
+                    type="button"
+                    className="guide-focus-button"
+                    onClick={() => setComparisonVersionId(null)}
+                  >
+                    Compare current draft
+                  </button>
+                ) : null}
+              </div>
+
+              {!latestProofVersion ? (
+                <p className="guide-empty">
+                  Create a proof version to keep a review snapshot, then compare later edits against it.
+                </p>
+              ) : comparisonDiff === null ? (
+                <p className="guide-empty">Create a proof version to keep a review snapshot, then compare later edits against it.</p>
+              ) : comparisonDiff.items.length === 0 ? (
+                <p className="guide-empty">
+                  {comparisonVersion ? "No changes between these proof versions." : "No changes since latest proof."}
+                </p>
+              ) : (
+                <>
+                  <p className="guide-summary">{comparisonDiff.summary}</p>
+                  <ul className="version-list">
+                    {comparisonDiff.items.map((item) => (
+                      <li key={item.id} className={`version-card diff-card diff-card-${item.severity}`}>
+                        <div className="guide-card-top">
+                          <strong>{item.summary}</strong>
+                          <span className="severity-pill">{item.severity}</span>
+                        </div>
+                        <p className="version-meta">
+                          Field: <strong>{item.field}</strong>
+                          {item.element_id ? ` · ${item.element_id}` : ""}
+                        </p>
+                        {item.before !== null ? (
+                          <p>
+                            Before: <span className="diff-value">{item.before}</span>
+                          </p>
+                        ) : null}
+                        {item.after !== null ? (
+                          <p>
+                            After: <span className="diff-value">{item.after}</span>
+                          </p>
+                        ) : null}
+                        {item.severity === "critical" ? <p className="diff-caution">Review carefully.</p> : null}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </section>
+
             {proofVersions.length === 0 ? (
               <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
             ) : (
@@ -532,6 +612,15 @@ export function App() {
                       >
                         Restore this version as working draft
                       </button>
+                      {!isLatest ? (
+                        <button
+                          type="button"
+                          className="guide-focus-button"
+                          onClick={() => setComparisonVersionId(version.id)}
+                        >
+                          Compare with latest proof
+                        </button>
+                      ) : null}
                     </li>
                   );
                 })}
