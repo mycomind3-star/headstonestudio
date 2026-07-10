@@ -100,6 +100,17 @@ The web shell uses browser `localStorage` only for this phase.
 
 This local storage layer is temporary. It exists to prove the browser contract now, while the persistence rules stay centralized in `packages/core` so a future database adapter can reuse the same draft/version logic without changing the domain model.
 
+## Proof versions
+
+The editor can create local proof versions from the current draft.
+
+- Each proof version snapshots the full `design_document` for review.
+- The version history shows what was reviewed and lets the user restore a snapshot as the working draft.
+- Proof creation does not approve the design, complete vendor review, or lock production.
+- Version history is stored in the same local draft autosave payload for now, so reload recovery preserves both the working draft and its proof history.
+
+That storage shape is temporary. A future database-backed version store should preserve the same immutable snapshot contract and recovery rules instead of inventing a new version model.
+
 ## Future persistence
 
 When the database layer is added, it should adapt to the same core contract instead of inventing a new one.

@@ -1,8 +1,17 @@
 import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
-import { createDraft, recoverDraftAutosave, serializeDraftAutosave, updateDraft, type DesignDraft } from "@headstone/core";
+import {
+  createDraft,
+  createVersion,
+  recoverDraftAutosave,
+  serializeDraftAutosave,
+  updateDraft,
+  type DesignDraft,
+  type DesignVersion,
+} from "@headstone/core";
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTemplateIndex, getTemplateTitle, memorialTemplates } from "./editorModel";
+import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
 
@@ -47,6 +56,11 @@ interface ReviewFocusAction {
   label: string;
 }
 
+interface ProofVersionToast {
+  tone: "saved" | "restored" | "idle";
+  message: string;
+}
+
 const findingFocusMap: Record<string, ReviewFocusAction | null> = {
   "missing-name": { target: "name", label: "Review name" },
   "missing-birth-date": { target: "birth_date", label: "Review birth date" },
@@ -67,6 +81,10 @@ export function App() {
   );
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [focusCue, setFocusCue] = useState<FocusCue | null>(null);
+  const [proofToast, setProofToast] = useState<ProofVersionToast>({
+    tone: "idle",
+    message: "Proof versions help preserve what was reviewed.",
+  });
   const fieldRefs = useRef<FieldRefs>({
     template: null,
     name: null,
@@ -142,6 +160,9 @@ export function App() {
   const visibleAdvice = agentResponse.advice.slice(0, 2);
   const hiddenFindingCount = Math.max(0, agentResponse.findings.length - visibleFindings.length);
   const hiddenActionCount = Math.max(0, agentResponse.suggested_actions.length - visibleActions.length);
+  const latestProofVersionNumber = draft.versions.at(-1)?.version_number ?? null;
+  const proofVersions = [...draft.versions].reverse();
+  const canCreateProofVersion = draft.status !== "production_locked" && draft.status !== "archived";
 
   function focusTarget(target: FocusTarget) {
     const element = fieldRefs.current[target];
@@ -153,6 +174,47 @@ export function App() {
     setFocusCue({
       target,
       token: Date.now(),
+    });
+  }
+
+  function createProofVersion() {
+    const now = new Date().toISOString();
+    const nextVersionNumber = draft.versions.length + 1;
+
+    try {
+      const next = createVersion(draft, {
+        id: `proof_${now.replaceAll(/[-:.TZ]/g, "")}`,
+        label: `Proof v${nextVersionNumber}`,
+        created_at: now,
+        created_by: "local_editor",
+      });
+      setDraft(next.draft);
+      setProofToast({
+        tone: "saved",
+        message: `Saved proof version v${next.version.version_number}.`,
+      });
+    } catch (error) {
+      setProofToast({
+        tone: "idle",
+        message: error instanceof Error ? error.message : "We could not save that proof version.",
+      });
+    }
+  }
+
+  function restoreProofVersion(version: DesignVersion) {
+    const now = new Date().toISOString();
+
+    setDraft((current) =>
+      updateDraft(current, {
+        title: getTemplateTitle(getTemplateIndex(version.design_document)),
+        design_document: version.design_document,
+        updated_at: now,
+      }),
+    );
+
+    setProofToast({
+      tone: "restored",
+      message: `Restored ${formatVersionLabel(version)} as the working draft.`,
     });
   }
 
@@ -308,6 +370,17 @@ export function App() {
               Elements: <strong>{draft.design_document.elements.length}</strong>
             </p>
             {recoveryNotice ? <p className="error-copy">{recoveryNotice}</p> : null}
+            <div className="proof-actions">
+              <button
+                type="button"
+                className="proof-button"
+                onClick={createProofVersion}
+                disabled={!canCreateProofVersion}
+              >
+                Create proof version
+              </button>
+              <p className={`proof-toast proof-toast-${proofToast.tone}`}>{proofToast.message}</p>
+            </div>
           </section>
 
           <p className="support-note">
@@ -334,8 +407,8 @@ export function App() {
           </div>
 
           <p className="preview-footnote">
-            This is a working design draft only. The production export will come later from the same
-            shared document and render layer.
+            Draft proof only — not production-ready. Proof versions preserve what was reviewed, and
+            the production export will come later from the same shared document and render layer.
           </p>
 
           <section className="guide-panel">
@@ -425,6 +498,49 @@ export function App() {
                 </ul>
               )}
             </section>
+          </section>
+
+          <section className="proof-history-panel">
+            <div className="guide-header">
+              <div>
+                <p className="panel-kicker">Version history</p>
+                <h3>Local proof versions</h3>
+              </div>
+              <p className="guide-note">Snapshot review only</p>
+            </div>
+
+            {proofVersions.length === 0 ? (
+              <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
+            ) : (
+              <ul className="version-list">
+                {proofVersions.map((version) => {
+                  const isLatest = version.version_number === latestProofVersionNumber;
+                  return (
+                    <li key={version.id} className="version-card">
+                      <div className="guide-card-top">
+                        <strong>{formatVersionLabel(version)}</strong>
+                        <span className="severity-pill">{version.id.slice(0, 8)}</span>
+                      </div>
+                      <p className="version-meta">
+                        {new Date(version.created_at).toLocaleString()} {isLatest ? "· Latest proof version" : ""}
+                      </p>
+                      <p>{summarizeProofVersion(version)}</p>
+                      <button
+                        type="button"
+                        className="guide-focus-button"
+                        onClick={() => restoreProofVersion(version)}
+                      >
+                        Restore this version as working draft
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="guide-more">
+              Proof versions are local snapshots for review. They are not family approval and they do
+              not approve production.
+            </p>
           </section>
         </section>
       </section>

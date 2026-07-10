@@ -73,6 +73,32 @@ describe("core domain", () => {
     expect(result.draft.versions).toHaveLength(1);
   });
 
+  it("keeps earlier proof versions immutable after later edits", () => {
+    const draft = makeDraft();
+    const firstResult = createVersion(draft, {
+      id: "version_1",
+      label: "Initial review",
+      created_at: "2026-07-09T22:02:00.000Z",
+      created_by: "user_1",
+    });
+
+    const editedDraft = updateDraft(firstResult.draft, {
+      design_document: secondFixture,
+      updated_at: "2026-07-09T22:03:00.000Z",
+    });
+
+    const secondResult = createVersion(editedDraft, {
+      id: "version_2",
+      label: "Second review",
+      created_at: "2026-07-09T22:04:00.000Z",
+      created_by: "user_1",
+    });
+
+    expect(firstResult.version.design_document).toEqual(firstFixture);
+    expect(secondResult.version.design_document).toEqual(secondFixture);
+    expect(firstResult.version.design_document).not.toEqual(secondResult.version.design_document);
+  });
+
   it("prevents editing once production is locked", () => {
     const reviewed = createVersion(makeDraft(), {
       id: "version_1",
