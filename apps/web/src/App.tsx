@@ -52,6 +52,13 @@ import { createProofDocument, type ProofDocument, type ProofDocumentSection } fr
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTemplateIndex, getTemplateTitle, memorialTemplates } from "./editorModel";
+import { CanvasPreviewStage } from "./CanvasPreviewStage";
+import {
+  getCanvasElementDescriptor,
+  isCanvasElementOutsideSafeArea,
+  setCanvasElementPosition,
+  updateEditableDocumentFields,
+} from "./canvasModel";
 import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
@@ -473,6 +480,7 @@ export function App() {
   const [vendorReviewRevocationReasons, setVendorReviewRevocationReasons] = useState<Record<string, string>>({});
   const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
   const [proofVersionId, setProofVersionId] = useState<string | null>(null);
+  const [selectedCanvasElementId, setSelectedCanvasElementId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
     template: null,
     name: null,
@@ -483,6 +491,16 @@ export function App() {
   const focusTimerRef = useRef<number | null>(null);
   const reviewNotesPanelRef = useRef<HTMLElement | null>(null);
   const reviewNoteBodyRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (selectedCanvasElementId === null) {
+      return;
+    }
+
+    if (!draft.design_document.elements.some((element) => element.id === selectedCanvasElementId)) {
+      setSelectedCanvasElementId(null);
+    }
+  }, [draft.design_document, selectedCanvasElementId]);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -637,6 +655,16 @@ export function App() {
   const templateIndex = getTemplateIndex(draft.design_document);
   const editorFields = getEditableFields(draft.design_document);
   const previewSvg = renderDesignDocumentToSvg(draft.design_document);
+  const selectedCanvasElement = useMemo(
+    () =>
+      selectedCanvasElementId
+        ? getCanvasElementDescriptor(draft.design_document, selectedCanvasElementId)
+        : null,
+    [draft.design_document, selectedCanvasElementId],
+  );
+  const selectedCanvasElementOutsideSafeArea = selectedCanvasElement
+    ? isCanvasElementOutsideSafeArea(draft.design_document, selectedCanvasElement.id)
+    : false;
   const agentResponse = useMemo(
     () =>
       analyzeDesignDraft({
@@ -800,6 +828,24 @@ export function App() {
     setFocusCue({
       target,
       token: Date.now(),
+    });
+  }
+
+  function selectCanvasElement(elementId: string) {
+    setSelectedCanvasElementId(elementId);
+  }
+
+  function clearCanvasSelection() {
+    setSelectedCanvasElementId(null);
+  }
+
+  function moveSelectedCanvasElement(elementId: string, nextX: number, nextY: number) {
+    setDraft((current) => {
+      const nextDocument = setCanvasElementPosition(current.design_document, elementId, nextX, nextY);
+      return updateDraft(current, {
+        design_document: nextDocument,
+        updated_at: new Date().toISOString(),
+      });
     });
   }
 
@@ -1200,7 +1246,6 @@ export function App() {
     const now = new Date().toISOString();
 
     setDraft((current) => {
-      const nextTemplateIndex = getTemplateIndex(current.design_document);
       const currentFields = getEditableFields(current.design_document);
       const nextFields = {
         ...currentFields,
@@ -1208,8 +1253,8 @@ export function App() {
       };
 
       return updateDraft(current, {
-        title: getTemplateTitle(nextTemplateIndex),
-        design_document: buildEditableDocument(nextTemplateIndex, nextFields),
+        title: current.title,
+        design_document: updateEditableDocumentFields(current.design_document, nextFields),
         updated_at: now,
       });
     });
@@ -1391,6 +1436,92 @@ export function App() {
             </label>
           </section>
 
+          <section className="panel-block canvas-inspector">
+            <div className="guide-header">
+              <div>
+                <p className="panel-kicker">Selected element</p>
+                <h3>Direct canvas editing</h3>
+              </div>
+              {selectedCanvasElement ? (
+                <button type="button" className="guide-focus-button" onClick={clearCanvasSelection}>
+                  Clear selection
+                </button>
+              ) : null}
+            </div>
+
+            {selectedCanvasElement ? (
+              <>
+                <p className="guide-summary">
+                  {selectedCanvasElement.label}. Click, drag, or use the arrow keys on the preview to
+                  move it.
+                </p>
+
+                <div className="canvas-inspector-grid">
+                  <div className="canvas-inspector-readout">
+                    <span>Type</span>
+                    <strong>{selectedCanvasElement.type}</strong>
+                  </div>
+                  <div className="canvas-inspector-readout">
+                    <span>Label</span>
+                    <strong>{selectedCanvasElement.label}</strong>
+                  </div>
+                  <label className="field" htmlFor="selected-element-x">
+                    <span>X position</span>
+                    <input
+                      id="selected-element-x"
+                      type="number"
+                      step="0.01"
+                      value={selectedCanvasElement.x.toFixed(2)}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        if (Number.isFinite(nextValue)) {
+                          moveSelectedCanvasElement(selectedCanvasElement.id, nextValue, selectedCanvasElement.y);
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="field" htmlFor="selected-element-y">
+                    <span>Y position</span>
+                    <input
+                      id="selected-element-y"
+                      type="number"
+                      step="0.01"
+                      value={selectedCanvasElement.y.toFixed(2)}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        if (Number.isFinite(nextValue)) {
+                          moveSelectedCanvasElement(selectedCanvasElement.id, selectedCanvasElement.x, nextValue);
+                        }
+                      }}
+                    />
+                  </label>
+                  <div className="canvas-inspector-readout">
+                    <span>Width</span>
+                    <strong>{selectedCanvasElement.width.toFixed(2)}</strong>
+                  </div>
+                  <div className="canvas-inspector-readout">
+                    <span>Height</span>
+                    <strong>{selectedCanvasElement.height.toFixed(2)}</strong>
+                  </div>
+                  <div className="canvas-inspector-readout">
+                    <span>Rotation</span>
+                    <strong>{selectedCanvasElement.rotation_deg.toFixed(1)}°</strong>
+                  </div>
+                </div>
+
+                {selectedCanvasElementOutsideSafeArea ? (
+                  <p className="canvas-warning">
+                    This element may be too close to the edge for production. Vendor review required.
+                  </p>
+                ) : null}
+              </>
+            ) : (
+              <p className="guide-empty">
+                Select a name, date, epitaph, symbol, or artwork element in the preview to adjust it.
+              </p>
+            )}
+          </section>
+
           <section className="panel-block">
             <p className="panel-kicker">Draft status</p>
             <p className="meta-line">
@@ -1432,16 +1563,20 @@ export function App() {
           </div>
 
           <div className="preview-stage">
-            <div
-              className="preview-svg"
-              aria-label="Live memorial design preview"
-              dangerouslySetInnerHTML={{ __html: previewSvg }}
+            <CanvasPreviewStage
+              document={draft.design_document}
+              previewSvg={previewSvg}
+              selectedElementId={selectedCanvasElementId}
+              onSelectElement={selectCanvasElement}
+              onClearSelection={clearCanvasSelection}
+              onMoveElement={moveSelectedCanvasElement}
             />
           </div>
 
           <p className="preview-footnote">
-            Draft proof only — not production-ready. Proof versions preserve what was reviewed, and
-            the production export will come later from the same shared document and render layer.
+            Draft proof only - not production-ready. Click, drag, or use arrow keys to adjust the
+            selected element. Proof versions preserve what was reviewed, and the production export
+            will come later from the same shared document and render layer.
           </p>
 
           <section className="guide-panel">
@@ -1457,6 +1592,15 @@ export function App() {
 
             <section className="guide-section">
               <h4>Findings</h4>
+              {selectedCanvasElementOutsideSafeArea ? (
+                <div className="guide-card guide-card-warning">
+                  <div className="guide-card-top">
+                    <strong>Selected element near the edge</strong>
+                    <span className="severity-pill">warning</span>
+                  </div>
+                  <p>This element may be too close to the edge for production. Vendor review required.</p>
+                </div>
+              ) : null}
               {visibleFindings.length === 0 ? (
                 <p className="guide-empty">No immediate concerns.</p>
               ) : (

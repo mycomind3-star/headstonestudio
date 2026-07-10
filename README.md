@@ -213,6 +213,17 @@ The web editor now combines manual memorial field editing, deterministic SVG pre
 - It helps surface calm findings, next actions, and wording notes, but it does not approve production files.
 - Those focus actions are navigational only and never mutate the draft.
 
+## Direct canvas editing
+
+The preview also supports direct positioning of selectable memorial elements.
+
+- Name, date, epitaph, symbol, photo etch, and custom art elements can be selected in the SVG preview.
+- Dragging, clicking, or using the arrow keys updates the current working draft only.
+- The inspector shows position and size details for the selected element and allows small numeric x/y adjustments.
+- Layout changes immediately update the deterministic preview and autosave, but they do not create proof versions or approvals.
+- If an element drifts too close to the edge, the editor shows a calm vendor-review warning instead of pretending it is ready for production.
+- Proof versions remain immutable snapshots even when the working draft keeps moving.
+
 ## Printable proof workflow
 
 The visual editor also includes a local proof document view for the selected proof version.

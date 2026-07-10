@@ -681,6 +681,20 @@ select {
   overflow: auto;
 }
 
+.preview-canvas {
+  position: relative;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  outline: none;
+}
+
+.preview-canvas:focus-visible {
+  outline: 2px solid rgba(123, 101, 85, 0.3);
+  outline-offset: 0.35rem;
+  border-radius: 1rem;
+}
+
 .preview-svg {
   width: 100%;
   display: grid;
@@ -691,6 +705,85 @@ select {
   display: block;
   max-width: 100%;
   height: auto;
+}
+
+.preview-interaction-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.canvas-hitbox {
+  fill: rgba(255, 255, 255, 0.01);
+  stroke: transparent;
+  cursor: grab;
+}
+
+.canvas-hitbox:active {
+  cursor: grabbing;
+}
+
+.canvas-selection-outline {
+  fill: none;
+  stroke: rgba(123, 101, 85, 0.92);
+  stroke-width: 0.05;
+  stroke-dasharray: 0.18 0.12;
+}
+
+.canvas-selection-outline-warning {
+  stroke: rgba(153, 96, 96, 0.9);
+}
+
+.canvas-selection-handle {
+  fill: rgba(255, 255, 255, 0.95);
+  stroke: rgba(123, 101, 85, 0.8);
+  stroke-width: 0.03;
+}
+
+.canvas-inspector {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.canvas-inspector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.canvas-inspector-readout {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(250, 247, 242, 0.94);
+  padding: 0.7rem 0.8rem;
+  display: grid;
+  gap: 0.2rem;
+}
+
+.canvas-inspector-readout span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.74rem;
+  color: #7b6555;
+}
+
+.canvas-inspector-readout strong {
+  color: #43362d;
+  font-weight: 600;
+}
+
+.canvas-warning {
+  margin: 0;
+  border: 1px solid rgba(153, 96, 96, 0.16);
+  border-radius: 0.9rem;
+  background: rgba(153, 96, 96, 0.08);
+  padding: 0.75rem 0.9rem;
+  color: #7f3d3d;
+  line-height: 1.5;
 }
 
 .preview-footnote {
@@ -952,7 +1045,8 @@ select {
   }
 
   .review-note-grid,
-  .field-row {
+  .field-row,
+  .canvas-inspector-grid {
     grid-template-columns: 1fr;
   }
 
