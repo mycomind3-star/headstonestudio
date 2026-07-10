@@ -135,7 +135,8 @@ select {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   border: 1px solid rgba(77, 55, 41, 0.16);
   border-radius: 0.9rem;
   padding: 0.82rem 0.95rem;
@@ -143,8 +144,14 @@ select {
   color: inherit;
 }
 
+.field textarea {
+  resize: vertical;
+  min-height: 7rem;
+}
+
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.field textarea:focus {
   outline: 2px solid rgba(123, 101, 85, 0.3);
   outline-offset: 1px;
 }
@@ -235,6 +242,10 @@ select {
   color: #345064;
 }
 
+.proof-toast-error {
+  color: #7f3d3d;
+}
+
 .proof-history-panel {
   border-top: 1px solid rgba(77, 55, 41, 0.1);
   padding-top: 0.8rem;
@@ -249,6 +260,113 @@ select {
   background: rgba(255, 255, 255, 0.7);
   display: grid;
   gap: 0.85rem;
+}
+
+.diff-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.diff-card-footer .diff-caution {
+  margin: 0;
+}
+
+.review-notes-panel {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.review-note-form {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.review-note-form-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.review-note-form h5 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+}
+
+.review-note-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.review-note-link {
+  margin: 0;
+}
+
+.review-note-version-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.review-note-version {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.88);
+  display: grid;
+  gap: 0.65rem;
+}
+
+.review-note-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.review-note-card {
+  border-radius: 0.95rem;
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  padding: 0.8rem 0.9rem;
+  background: rgba(250, 247, 242, 0.92);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.review-note-card p {
+  margin: 0;
+  line-height: 1.5;
+  color: #594c43;
+}
+
+.review-note-card-open {
+  border-color: rgba(115, 139, 106, 0.18);
+}
+
+.review-note-card-closed {
+  opacity: 0.88;
+}
+
+.review-note-meta,
+.review-note-source {
+  font-size: 0.92rem;
+  color: #6a5b51;
+}
+
+.review-note-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
 }
 
 .version-list {
@@ -481,5 +599,16 @@ select {
 
   .studio-grid {
     grid-template-columns: 1fr;
+  }
+
+  .review-note-grid,
+  .field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-note-form-header,
+  .diff-card-footer {
+    align-items: start;
+    flex-direction: column;
   }
 }

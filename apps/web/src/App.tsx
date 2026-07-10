@@ -1,14 +1,26 @@
 import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
 import {
   createDraft,
+  createProofReviewNote,
   createVersion,
   compareDesignVersions,
   compareDraftToLatestVersion,
+  dismissProofReviewNote,
   recoverDraftAutosave,
+  recoverProofReviewNotes,
   serializeDraftAutosave,
+  serializeProofReviewNotes,
+  listOpenReviewNotes,
+  listReviewNotesForVersion,
+  resolveProofReviewNote,
   updateDraft,
   type DesignDraft,
   type DesignVersion,
+  type CreateProofReviewNoteInput,
+  type ProofReviewNote,
+  type ProofReviewNoteType,
+  type ProofVersionDiffField,
+  type ProofVersionDiffItem,
 } from "@headstone/core";
 import { renderDesignDocumentToSvg } from "@headstone/render";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +28,7 @@ import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTem
 import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
+const REVIEW_NOTES_STORAGE_KEY = "headstone-design-studio:review-notes:v1";
 
 function createWorkingDraft(): DesignDraft {
   const now = new Date().toISOString();
@@ -63,6 +76,19 @@ interface ProofVersionToast {
   message: string;
 }
 
+interface ReviewNoteToast {
+  tone: "idle" | "saved" | "error";
+  message: string;
+}
+
+interface ReviewNoteDraft {
+  type: ProofReviewNoteType;
+  body: string;
+  createdByLabel: "Local reviewer" | "Staff";
+  diffItemId: string | null;
+  diffField: ProofVersionDiffField | null;
+}
+
 const findingFocusMap: Record<string, ReviewFocusAction | null> = {
   "missing-name": { target: "name", label: "Review name" },
   "missing-birth-date": { target: "birth_date", label: "Review birth date" },
@@ -70,6 +96,67 @@ const findingFocusMap: Record<string, ReviewFocusAction | null> = {
   "empty-epitaph": { target: "epitaph", label: "Review epitaph" },
   "long-epitaph": { target: "epitaph", label: "Review epitaph" },
 };
+
+const reviewNoteTypeLabels: Record<ProofReviewNoteType, string> = {
+  general: "General",
+  name_review: "Name review",
+  date_review: "Date review",
+  epitaph_review: "Epitaph review",
+  layout_review: "Layout review",
+  artwork_review: "Artwork review",
+  production_question: "Production question",
+};
+
+const reviewNoteFieldLabels: Record<ProofVersionDiffField, string> = {
+  name: "Name",
+  birth_date: "Birth date",
+  death_date: "Death date",
+  epitaph: "Epitaph",
+  shape: "Shape",
+  layout: "Layout",
+  material: "Material",
+  text_block: "Text block",
+  symbol: "Symbol",
+  photo_etch: "Photo etch",
+  custom_art: "Custom art",
+  border: "Border",
+};
+
+function getReviewNoteTypeForField(field: ProofVersionDiffField): ProofReviewNoteType {
+  switch (field) {
+    case "name":
+      return "name_review";
+    case "birth_date":
+    case "death_date":
+      return "date_review";
+    case "epitaph":
+      return "epitaph_review";
+    case "layout":
+      return "layout_review";
+    case "shape":
+    case "material":
+    case "text_block":
+    case "symbol":
+    case "photo_etch":
+    case "custom_art":
+    case "border":
+      return "artwork_review";
+  }
+}
+
+function formatReviewNoteFieldLabel(field: ProofVersionDiffField): string {
+  return reviewNoteFieldLabels[field];
+}
+
+function createDefaultReviewNoteDraft(): ReviewNoteDraft {
+  return {
+    type: "general",
+    body: "",
+    createdByLabel: "Local reviewer",
+    diffItemId: null,
+    diffField: null,
+  };
+}
 
 function getReviewActionForFinding(finding: AgentFinding): ReviewFocusAction | null {
   return findingFocusMap[finding.id] ?? null;
@@ -87,6 +174,14 @@ export function App() {
     tone: "idle",
     message: "Proof versions help preserve what was reviewed.",
   });
+  const [reviewNotes, setReviewNotes] = useState<ProofReviewNote[]>([]);
+  const [reviewNotesHydrated, setReviewNotesHydrated] = useState(false);
+  const [reviewNotesNotice, setReviewNotesNotice] = useState<string | null>(null);
+  const [reviewNoteToast, setReviewNoteToast] = useState<ReviewNoteToast>({
+    tone: "idle",
+    message: "Local review notes stay with this browser.",
+  });
+  const [reviewNoteDraft, setReviewNoteDraft] = useState<ReviewNoteDraft>(() => createDefaultReviewNoteDraft());
   const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
     template: null,
@@ -96,6 +191,8 @@ export function App() {
     epitaph: null,
   });
   const focusTimerRef = useRef<number | null>(null);
+  const reviewNotesPanelRef = useRef<HTMLElement | null>(null);
+  const reviewNoteBodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -117,6 +214,28 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem(REVIEW_NOTES_STORAGE_KEY);
+
+    if (raw === null) {
+      setReviewNotes([]);
+      setReviewNotesNotice(null);
+      setReviewNotesHydrated(true);
+      return;
+    }
+
+    const recovered = recoverProofReviewNotes(raw, REVIEW_NOTES_STORAGE_KEY);
+    if (recovered.ok) {
+      setReviewNotes(recovered.notes);
+      setReviewNotesNotice(null);
+    } else {
+      setReviewNotes([]);
+      setReviewNotesNotice(recovered.message);
+    }
+
+    setReviewNotesHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (!hydrated) {
       return;
     }
@@ -124,6 +243,14 @@ export function App() {
     window.localStorage.setItem(STORAGE_KEY, serializeDraftAutosave(draft));
     setAutosaveStatus(formatAutosaveStatus("saved", "Saved locally."));
   }, [draft, hydrated]);
+
+  useEffect(() => {
+    if (!reviewNotesHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(REVIEW_NOTES_STORAGE_KEY, serializeProofReviewNotes(reviewNotes));
+  }, [reviewNotes, reviewNotesHydrated]);
 
   useEffect(() => {
     if (focusCue === null) {
@@ -146,6 +273,16 @@ export function App() {
       }
     };
   }, [focusCue]);
+
+  useEffect(() => {
+    if (reviewNoteDraft.diffItemId === null && reviewNoteDraft.diffField === null) {
+      return;
+    }
+
+    if (reviewNoteBodyRef.current) {
+      reviewNoteBodyRef.current.focus({ preventScroll: true });
+    }
+  }, [reviewNoteDraft.diffItemId, reviewNoteDraft.diffField]);
 
   const templateIndex = getTemplateIndex(draft.design_document);
   const editorFields = getEditableFields(draft.design_document);
@@ -236,6 +373,87 @@ export function App() {
     setProofToast({
       tone: "restored",
       message: `Restored ${formatVersionLabel(version)} as the working draft.`,
+    });
+  }
+
+  function addNoteFromDiffItem(item: ProofVersionDiffItem) {
+    if (!latestProofVersion) {
+      return;
+    }
+
+    setReviewNoteDraft((current) => ({
+      ...current,
+      type: getReviewNoteTypeForField(item.field),
+      diffItemId: item.id,
+      diffField: item.field,
+    }));
+    reviewNotesPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function saveReviewNote() {
+    if (!latestProofVersion) {
+      return;
+    }
+
+    const body = reviewNoteDraft.body.trim();
+    if (body.length === 0) {
+      setReviewNoteToast({
+        tone: "error",
+        message: "Write a short note before saving it.",
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const noteInput: CreateProofReviewNoteInput = {
+      id: `note_${now.replaceAll(/[-:.TZ]/g, "")}`,
+      versionId: latestProofVersion.id,
+      type: reviewNoteDraft.type,
+      body,
+      createdAt: now,
+      updatedAt: now,
+      createdByLabel: reviewNoteDraft.createdByLabel,
+    };
+
+    if (reviewNoteDraft.diffItemId !== null) {
+      noteInput.diffItemId = reviewNoteDraft.diffItemId;
+    }
+
+    if (reviewNoteDraft.diffField !== null) {
+      noteInput.diffField = reviewNoteDraft.diffField;
+    }
+
+    const note = createProofReviewNote(noteInput);
+
+    setReviewNotes((current) => [note, ...current]);
+    setReviewNoteDraft((current) => ({
+      ...createDefaultReviewNoteDraft(),
+      createdByLabel: current.createdByLabel,
+    }));
+    setReviewNoteToast({
+      tone: "saved",
+      message: "Saved a local review note.",
+    });
+  }
+
+  function updateReviewNoteStatus(note: ProofReviewNote, nextStatus: "resolved" | "dismissed") {
+    const now = new Date().toISOString();
+
+    setReviewNotes((current) =>
+      current.map((currentNote) => {
+        if (currentNote.id !== note.id) {
+          return currentNote;
+        }
+
+        return nextStatus === "resolved"
+          ? resolveProofReviewNote(currentNote, now)
+          : dismissProofReviewNote(currentNote, now);
+      }),
+    );
+
+    setReviewNoteToast({
+      tone: "saved",
+      message: nextStatus === "resolved" ? "Marked the note resolved." : "Marked the note dismissed.",
     });
   }
 
@@ -581,11 +799,228 @@ export function App() {
                             After: <span className="diff-value">{item.after}</span>
                           </p>
                         ) : null}
-                        {item.severity === "critical" ? <p className="diff-caution">Review carefully.</p> : null}
+                        <div className="diff-card-footer">
+                          {item.severity === "critical" ? <p className="diff-caution">Review carefully.</p> : null}
+                          {latestProofVersion ? (
+                            <button
+                              type="button"
+                              className="guide-focus-button"
+                              onClick={() => addNoteFromDiffItem(item)}
+                            >
+                              Add note
+                            </button>
+                          ) : null}
+                        </div>
                       </li>
                     ))}
                   </ul>
                 </>
+              )}
+            </section>
+
+            <section
+              className="review-notes-panel"
+              ref={(node) => {
+                reviewNotesPanelRef.current = node;
+              }}
+            >
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">Review notes</p>
+                  <h4>Local notes for proof changes</h4>
+                </div>
+                <p className="guide-note">Local only, not approval</p>
+              </div>
+
+              <p className="guide-summary">
+                Record what needs to be checked. These notes stay in this browser and do not approve a proof.
+              </p>
+
+              {reviewNotesNotice ? <p className="error-copy">{reviewNotesNotice}</p> : null}
+
+              {latestProofVersion ? (
+                <section className="review-note-form">
+                  <div className="review-note-form-header">
+                    <div>
+                      <p className="panel-kicker">Add note</p>
+                      <h5>{formatVersionLabel(latestProofVersion)}</h5>
+                    </div>
+                    <p className="guide-note">Record what needs to be checked</p>
+                  </div>
+
+                  <div className="review-note-grid">
+                    <label className="field" htmlFor="review-note-type">
+                      <span>Note type</span>
+                      <select
+                        id="review-note-type"
+                        value={reviewNoteDraft.type}
+                        onChange={(event) =>
+                          setReviewNoteDraft((current) => ({
+                            ...current,
+                            type: event.target.value as ProofReviewNoteType,
+                          }))
+                        }
+                      >
+                        {Object.entries(reviewNoteTypeLabels).map(([value, label]) => (
+                          <option key={value} value={value}>
+                            {label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label className="field" htmlFor="review-note-author">
+                      <span>Recorded by</span>
+                      <select
+                        id="review-note-author"
+                        value={reviewNoteDraft.createdByLabel}
+                        onChange={(event) =>
+                          setReviewNoteDraft((current) => ({
+                            ...current,
+                            createdByLabel: event.target.value as "Local reviewer" | "Staff",
+                          }))
+                        }
+                      >
+                        <option value="Local reviewer">Local reviewer</option>
+                        <option value="Staff">Staff</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <label className="field" htmlFor="review-note-body">
+                    <span>Note body</span>
+                    <textarea
+                      id="review-note-body"
+                      ref={(node) => {
+                        reviewNoteBodyRef.current = node;
+                      }}
+                      value={reviewNoteDraft.body}
+                      onChange={(event) =>
+                        setReviewNoteDraft((current) => ({
+                          ...current,
+                          body: event.target.value,
+                        }))
+                      }
+                      placeholder="Record what needs to be checked."
+                      rows={4}
+                    />
+                  </label>
+
+                  <div className="review-note-link">
+                    {reviewNoteDraft.diffField ? (
+                      <p className="version-meta">
+                        Linked change: <strong>{formatReviewNoteFieldLabel(reviewNoteDraft.diffField)}</strong>
+                        {reviewNoteDraft.diffItemId ? ` · ${reviewNoteDraft.diffItemId}` : ""}
+                      </p>
+                    ) : reviewNoteDraft.diffItemId ? (
+                      <p className="version-meta">
+                        Linked change: <strong>Selected diff item</strong> · {reviewNoteDraft.diffItemId}
+                      </p>
+                    ) : (
+                      <p className="version-meta">No specific change linked yet.</p>
+                    )}
+                  </div>
+
+                  <div className="proof-actions">
+                    <button type="button" className="proof-button" onClick={saveReviewNote}>
+                      Save local review note
+                    </button>
+                    <p className={`proof-toast proof-toast-${reviewNoteToast.tone}`}>{reviewNoteToast.message}</p>
+                  </div>
+                </section>
+              ) : (
+                <p className="guide-empty">Create a proof version to add local review notes.</p>
+              )}
+
+              {proofVersions.length === 0 || reviewNotes.length === 0 ? (
+                <p className="guide-empty">
+                  No local review notes yet. Add one when a spelling, date, wording, or layout check needs follow-up.
+                </p>
+              ) : (
+                <div className="review-note-version-list">
+                  {proofVersions.map((version) => {
+                    const notesForVersion = listReviewNotesForVersion(reviewNotes, version.id);
+                    if (notesForVersion.length === 0) {
+                      return null;
+                    }
+
+                    const openNotes = listOpenReviewNotes(notesForVersion);
+                    const closedNotes = notesForVersion.filter((note) => note.status !== "open");
+
+                    return (
+                      <section key={version.id} className="review-note-version">
+                        <div className="guide-card-top">
+                          <strong>{formatVersionLabel(version)}</strong>
+                          <span className="severity-pill">{notesForVersion.length}</span>
+                        </div>
+                        <p className="version-meta">
+                          {new Date(version.created_at).toLocaleString()} · {openNotes.length} open
+                        </p>
+
+                        <div className="review-note-stack">
+                          {openNotes.map((note) => (
+                            <article key={note.id} className="review-note-card review-note-card-open">
+                              <div className="guide-card-top">
+                                <strong>{reviewNoteTypeLabels[note.type]}</strong>
+                                <span className="severity-pill">{note.status}</span>
+                              </div>
+                              <p>{note.body}</p>
+                              <p className="review-note-meta">
+                                {note.createdByLabel} · {new Date(note.createdAt).toLocaleString()}
+                              </p>
+                              {note.diffField ? (
+                                <p className="review-note-source">
+                                  Linked to <strong>{formatReviewNoteFieldLabel(note.diffField)}</strong>
+                                  {note.diffItemId ? ` · ${note.diffItemId}` : ""}
+                                </p>
+                              ) : note.diffItemId ? (
+                                <p className="review-note-source">Linked to diff item {note.diffItemId}</p>
+                              ) : null}
+                              <div className="review-note-actions">
+                                <button
+                                  type="button"
+                                  className="guide-focus-button"
+                                  onClick={() => updateReviewNoteStatus(note, "resolved")}
+                                >
+                                  Resolve
+                                </button>
+                                <button
+                                  type="button"
+                                  className="guide-focus-button"
+                                  onClick={() => updateReviewNoteStatus(note, "dismissed")}
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+
+                          {closedNotes.map((note) => (
+                            <article key={note.id} className="review-note-card review-note-card-closed">
+                              <div className="guide-card-top">
+                                <strong>{reviewNoteTypeLabels[note.type]}</strong>
+                                <span className="severity-pill">{note.status}</span>
+                              </div>
+                              <p>{note.body}</p>
+                              <p className="review-note-meta">
+                                {note.createdByLabel} · {new Date(note.createdAt).toLocaleString()}
+                              </p>
+                              {note.diffField ? (
+                                <p className="review-note-source">
+                                  Linked to <strong>{formatReviewNoteFieldLabel(note.diffField)}</strong>
+                                  {note.diffItemId ? ` · ${note.diffItemId}` : ""}
+                                </p>
+                              ) : note.diffItemId ? (
+                                <p className="review-note-source">Linked to diff item {note.diffItemId}</p>
+                              ) : null}
+                              <p className="guide-more">This note is closed and kept in local history.</p>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
               )}
             </section>
 

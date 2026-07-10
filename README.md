@@ -121,6 +121,17 @@ The editor can compare the current draft against the latest proof version, or co
 - Comparison is for review and audit history, not for approval.
 - A comparison result never mutates the draft, creates a version, or changes approval status.
 
+## Review notes
+
+Local review notes can be attached to proof versions and, when useful, to specific diff items.
+
+- Notes help staff or reviewers record what needs to be checked, especially name, date, and epitaph changes.
+- Notes have local statuses: open, resolved, and dismissed.
+- Notes are not approvals and do not change draft status, family approval, vendor review, or production lock.
+- The browser stores notes in `localStorage` for now, alongside the draft and proof history.
+
+That storage is temporary. A future database-backed note store should preserve the same version IDs and diff references so review history stays auditable without changing the note model.
+
 ## Future persistence
 
 When the database layer is added, it should adapt to the same core contract instead of inventing a new one.
@@ -129,6 +140,7 @@ When the database layer is added, it should adapt to the same core contract inst
 - Draft rows should store the same `design_document` shape.
 - Version rows should snapshot the full design document exactly as the core contract creates it.
 - Autosave recovery and server-side persistence should both rely on the same validation rules.
+- Note storage should preserve version IDs and diff references instead of flattening them away.
 
 ## Design Guide Agent
 
