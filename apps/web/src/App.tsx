@@ -2,6 +2,7 @@ import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
 import {
   createDraft,
   createProofApprovalRecord,
+  createVendorProductionReview,
   createProofReviewNote,
   createVersion,
   compareDesignVersions,
@@ -10,25 +11,36 @@ import {
   recoverDraftAutosave,
   recoverProofApprovals,
   recoverProofReviewNotes,
+  recoverVendorProductionReviews,
   serializeDraftAutosave,
   serializeProofApprovals,
   serializeProofReviewNotes,
+  serializeVendorProductionReviews,
   listOpenReviewNotes,
   listActiveProofApprovals,
   listApprovalsForVersion,
+  listVendorReviewsForVersion,
   listReviewNotesForVersion,
+  getLatestVendorReviewForVersion,
   resolveProofReviewNote,
+  isVendorReviewReady,
+  markVendorReviewReady,
+  revokeVendorProductionReview,
   revokeProofApprovalRecord,
+  updateVendorProductionReview,
   updateDraft,
   type DesignDraft,
   type DesignVersion,
   type CreateProofApprovalInput,
   type CreateProofReviewNoteInput,
+  type CreateVendorProductionReviewInput,
   type ProofApprovalRecord,
   type ProofReviewNote,
   type ProofReviewNoteType,
   type ProofVersionDiffField,
   type ProofVersionDiffItem,
+  type VendorProductionReview,
+  type VendorProductionReviewChecklistKey,
 } from "@headstone/core";
 import { createProofDocument, type ProofDocument, type ProofDocumentSection } from "@headstone/proof";
 import { renderDesignDocumentToSvg } from "@headstone/render";
@@ -39,6 +51,7 @@ import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
 const REVIEW_NOTES_STORAGE_KEY = "headstone-design-studio:review-notes:v1";
 const FAMILY_APPROVALS_STORAGE_KEY = "headstone-design-studio:family-proof-approvals:v1";
+const VENDOR_REVIEWS_STORAGE_KEY = "headstone-design-studio:vendor-production-reviews:v1";
 
 function createWorkingDraft(): DesignDraft {
   const now = new Date().toISOString();
@@ -87,6 +100,11 @@ interface ProofVersionToast {
 }
 
 interface ReviewNoteToast {
+  tone: "idle" | "saved" | "error";
+  message: string;
+}
+
+interface VendorReviewToast {
   tone: "idle" | "saved" | "error";
   message: string;
 }
@@ -231,6 +249,44 @@ const approvalAcknowledgmentOrder: (keyof ApprovalDraft["acknowledgments"])[] = 
   "understands_not_production_approval",
 ];
 
+const vendorReviewChecklistOrder: VendorProductionReviewChecklistKey[] = [
+  "family_approval_confirmed",
+  "name_spelling_checked",
+  "birth_date_checked",
+  "death_date_checked",
+  "epitaph_checked",
+  "layout_checked",
+  "safe_margins_checked",
+  "artwork_checked",
+  "material_size_checked",
+  "production_method_checked",
+  "proof_pdf_checked",
+  "understands_not_exported_for_production",
+];
+
+const vendorReviewStatusLabels: Record<VendorProductionReview["status"], string> = {
+  not_started: "Not started",
+  in_review: "In review",
+  needs_changes: "Needs changes",
+  ready_for_production_prep: "Ready for production prep",
+  revoked: "Revoked",
+};
+
+const vendorReviewChecklistLabels: Record<VendorProductionReviewChecklistKey, string> = {
+  family_approval_confirmed: "Family approval confirmed",
+  name_spelling_checked: "Name spelling checked",
+  birth_date_checked: "Birth date checked",
+  death_date_checked: "Death date checked",
+  epitaph_checked: "Epitaph checked",
+  layout_checked: "Layout checked",
+  safe_margins_checked: "Safe margins checked",
+  artwork_checked: "Artwork checked",
+  material_size_checked: "Material size checked",
+  production_method_checked: "Production method checked",
+  proof_pdf_checked: "Proof PDF checked",
+  understands_not_exported_for_production: "Understands this is not exported for production",
+};
+
 function getReviewNoteTypeForField(field: ProofVersionDiffField): ProofReviewNoteType {
   switch (field) {
     case "name":
@@ -282,6 +338,43 @@ function createDefaultApprovalDraft(): ApprovalDraft {
   };
 }
 
+function createDefaultVendorReviewChecklist(): Record<VendorProductionReviewChecklistKey, boolean> {
+  return vendorReviewChecklistOrder.reduce(
+    (accumulator, key) => {
+      accumulator[key] = false;
+      return accumulator;
+    },
+    {} as Record<VendorProductionReviewChecklistKey, boolean>,
+  );
+}
+
+function createVendorReviewChecklistItems(
+  checklist: Record<VendorProductionReviewChecklistKey, boolean>,
+) {
+  return vendorReviewChecklistOrder.map((key) => ({
+    key,
+    checked: checklist[key],
+  }));
+}
+
+function downgradeVendorReviewStatus(
+  status: VendorProductionReview["status"],
+): Exclude<VendorProductionReview["status"], "ready_for_production_prep" | "revoked"> {
+  if (status === "ready_for_production_prep") {
+    return "needs_changes";
+  }
+
+  if (status === "revoked") {
+    return "needs_changes";
+  }
+
+  if (status === "not_started") {
+    return "in_review";
+  }
+
+  return status;
+}
+
 function getReviewActionForFinding(finding: AgentFinding): ReviewFocusAction | null {
   return findingFocusMap[finding.id] ?? null;
 }
@@ -315,6 +408,15 @@ export function App() {
   });
   const [approvalDraft, setApprovalDraft] = useState<ApprovalDraft>(() => createDefaultApprovalDraft());
   const [revocationReasons, setRevocationReasons] = useState<Record<string, string>>({});
+  const [vendorReviews, setVendorReviews] = useState<VendorProductionReview[]>([]);
+  const [vendorReviewsHydrated, setVendorReviewsHydrated] = useState(false);
+  const [vendorReviewsNotice, setVendorReviewsNotice] = useState<string | null>(null);
+  const [vendorReviewToast, setVendorReviewToast] = useState<VendorReviewToast>({
+    tone: "idle",
+    message: "Local vendor reviews stay with this browser.",
+  });
+  const [vendorReviewVersionId, setVendorReviewVersionId] = useState<string | null>(null);
+  const [vendorReviewRevocationReasons, setVendorReviewRevocationReasons] = useState<Record<string, string>>({});
   const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
   const [proofVersionId, setProofVersionId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
@@ -392,6 +494,28 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem(VENDOR_REVIEWS_STORAGE_KEY);
+
+    if (raw === null) {
+      setVendorReviews([]);
+      setVendorReviewsNotice(null);
+      setVendorReviewsHydrated(true);
+      return;
+    }
+
+    const recovered = recoverVendorProductionReviews(raw, VENDOR_REVIEWS_STORAGE_KEY);
+    if (recovered.ok) {
+      setVendorReviews(recovered.reviews);
+      setVendorReviewsNotice(null);
+    } else {
+      setVendorReviews([]);
+      setVendorReviewsNotice(recovered.message);
+    }
+
+    setVendorReviewsHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (!hydrated) {
       return;
     }
@@ -415,6 +539,14 @@ export function App() {
 
     window.localStorage.setItem(FAMILY_APPROVALS_STORAGE_KEY, serializeProofApprovals(approvalRecords));
   }, [approvalHydrated, approvalRecords]);
+
+  useEffect(() => {
+    if (!vendorReviewsHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(VENDOR_REVIEWS_STORAGE_KEY, serializeVendorProductionReviews(vendorReviews));
+  }, [vendorReviews, vendorReviewsHydrated]);
 
   useEffect(() => {
     if (focusCue === null) {
@@ -475,6 +607,16 @@ export function App() {
     ? listApprovalsForVersion(approvalRecords, latestProofVersion.id)
     : [];
   const latestVersionActiveApprovals = listActiveProofApprovals(latestVersionApprovals);
+  const selectedVendorReviewVersion = vendorReviewVersionId
+    ? draft.versions.find((version) => version.id === vendorReviewVersionId) ?? latestProofVersion
+    : latestProofVersion;
+  const selectedVendorReview = selectedVendorReviewVersion
+    ? getLatestVendorReviewForVersion(vendorReviews, selectedVendorReviewVersion.id)
+    : null;
+  const latestVendorReviewForLatestProofVersion = latestProofVersion
+    ? getLatestVendorReviewForVersion(vendorReviews, latestProofVersion.id)
+    : null;
+  const latestProofHasFamilyApproval = latestVersionActiveApprovals.length > 0;
   const comparisonVersion = comparisonVersionId
     ? draft.versions.find((version) => version.id === comparisonVersionId) ?? null
     : null;
@@ -529,6 +671,21 @@ export function App() {
       setProofVersionId(latestProofVersion.id);
     }
   }, [draft.versions, latestProofVersion, proofVersionId]);
+
+  useEffect(() => {
+    if (latestProofVersion === null) {
+      if (vendorReviewVersionId !== null) {
+        setVendorReviewVersionId(null);
+      }
+      return;
+    }
+
+    const selectedVersionExists =
+      vendorReviewVersionId !== null && draft.versions.some((version) => version.id === vendorReviewVersionId);
+    if (!selectedVersionExists) {
+      setVendorReviewVersionId(latestProofVersion.id);
+    }
+  }, [draft.versions, latestProofVersion, vendorReviewVersionId]);
 
   const proofDocument = useMemo<ProofDocument | null>(() => {
     if (!selectedProofVersion) {
@@ -781,6 +938,188 @@ export function App() {
     setApprovalToast({
       tone: "saved",
       message: "Revoked the local family approval.",
+    });
+  }
+
+  function startVendorReview() {
+    if (!selectedVendorReviewVersion) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Create a proof version before starting vendor review.",
+      });
+      return;
+    }
+
+    if (selectedVendorReview !== null) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "A vendor review already exists for this proof version.",
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const reviewInput: CreateVendorProductionReviewInput = {
+      id: `vendor_review_${now.replaceAll(/[-:.TZ]/g, "")}`,
+      versionId: selectedVendorReviewVersion.id,
+      reviewedByLabel: "Staff",
+      createdAt: now,
+      updatedAt: now,
+      checklist: createVendorReviewChecklistItems(createDefaultVendorReviewChecklist()),
+      notes: "",
+      status: "not_started",
+    };
+
+    const review = createVendorProductionReview(reviewInput);
+    setVendorReviews((current) => [review, ...current]);
+    setVendorReviewToast({
+      tone: "saved",
+      message: "Started a local vendor review for this proof version.",
+    });
+  }
+
+  function updateCurrentVendorReview(
+    updater: (review: VendorProductionReview) => VendorProductionReview,
+  ) {
+    if (!selectedVendorReview) {
+      return;
+    }
+
+    if (selectedVendorReview.status === "revoked") {
+      setVendorReviewToast({
+        tone: "error",
+        message: "This vendor review has been revoked and cannot be edited.",
+      });
+      return;
+    }
+
+    setVendorReviews((current) =>
+      current.map((review) => {
+        if (review.id !== selectedVendorReview.id) {
+          return review;
+        }
+
+        return updater(review);
+      }),
+    );
+  }
+
+  function setVendorReviewChecklistItem(key: VendorProductionReviewChecklistKey, checked: boolean) {
+    if (!selectedVendorReview) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Start a vendor review before checking production items.",
+      });
+      return;
+    }
+
+    const currentChecklist = selectedVendorReview.checklist.reduce(
+      (accumulator, item) => {
+        accumulator[item.key] = item.checked;
+        return accumulator;
+      },
+      createDefaultVendorReviewChecklist(),
+    );
+    const nextChecklist = {
+      ...currentChecklist,
+      [key]: checked,
+    };
+
+    updateCurrentVendorReview(
+      (review) =>
+        updateVendorProductionReview(review, {
+          updatedAt: new Date().toISOString(),
+          checklist: createVendorReviewChecklistItems(nextChecklist),
+          status: downgradeVendorReviewStatus(review.status),
+        }),
+    );
+  }
+
+  function updateVendorReviewNotes(notes: string) {
+    if (!selectedVendorReview) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Start a vendor review before adding production notes.",
+      });
+      return;
+    }
+
+    updateCurrentVendorReview(
+      (review) =>
+        updateVendorProductionReview(review, {
+          updatedAt: new Date().toISOString(),
+          notes,
+          status: downgradeVendorReviewStatus(review.status),
+        }),
+    );
+  }
+
+  function updateVendorReviewLabel(reviewedByLabel: "Local reviewer" | "Staff") {
+    if (!selectedVendorReview) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Start a vendor review before changing the reviewer label.",
+      });
+      return;
+    }
+
+    updateCurrentVendorReview(
+      (review) =>
+        updateVendorProductionReview(review, {
+          updatedAt: new Date().toISOString(),
+          reviewedByLabel,
+          status: downgradeVendorReviewStatus(review.status),
+        }),
+    );
+  }
+
+  function markCurrentVendorReviewReady() {
+    if (!selectedVendorReview) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Start a vendor review before marking it ready.",
+      });
+      return;
+    }
+
+    try {
+      const readyReview = markVendorReviewReady(selectedVendorReview, new Date().toISOString());
+      setVendorReviews((current) => current.map((review) => (review.id === readyReview.id ? readyReview : review)));
+      setVendorReviewToast({
+        tone: "saved",
+        message: "Marked the review ready for production prep.",
+      });
+    } catch (error) {
+      setVendorReviewToast({
+        tone: "error",
+        message: error instanceof Error ? error.message : "We could not mark this review ready yet.",
+      });
+    }
+  }
+
+  function revokeCurrentVendorReview(review: VendorProductionReview) {
+    const reason = vendorReviewRevocationReasons[review.id]?.trim() ?? "";
+    if (reason.length === 0) {
+      setVendorReviewToast({
+        tone: "error",
+        message: "Enter a reason before revoking this vendor review.",
+      });
+      return;
+    }
+
+    const revoked = revokeVendorProductionReview(review, {
+      revokedAt: new Date().toISOString(),
+      revokedReason: reason,
+    });
+
+    setVendorReviews((current) => current.map((item) => (item.id === revoked.id ? revoked : item)));
+    setVendorReviewRevocationReasons((current) => ({
+      ...current,
+      [review.id]: "",
+    }));
+    setVendorReviewToast({
+      tone: "saved",
+      message: "Revoked the local vendor review.",
     });
   }
 
@@ -1603,6 +1942,253 @@ export function App() {
                     );
                   })}
                 </div>
+              )}
+            </section>
+
+            <section className="vendor-review-panel">
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">Vendor production review</p>
+                  <h3>Local production-prep checklist</h3>
+                </div>
+                <p className="guide-note">Human review only</p>
+              </div>
+
+              <p className="guide-summary">
+                Ready for production prep means the proof has been reviewed. It does not create engraving files or lock production.
+              </p>
+
+              {vendorReviewsNotice ? <p className="error-copy">{vendorReviewsNotice}</p> : null}
+
+              {latestProofVersion ? (
+                <>
+                  {!latestProofHasFamilyApproval ? (
+                    <p className="vendor-review-warning">
+                      Family approval has not been recorded for this proof version.
+                    </p>
+                  ) : null}
+
+                  <section className="vendor-review-form">
+                    <div className="vendor-review-form-header">
+                      <div>
+                        <p className="panel-kicker">Review target</p>
+                        <h4>{formatVersionLabel(selectedVendorReviewVersion ?? latestProofVersion)}</h4>
+                      </div>
+                      <p className="guide-note">Selected proof snapshot</p>
+                    </div>
+
+                    <label className="field" htmlFor="vendor-review-version-select">
+                      <span>Review version</span>
+                      <select
+                        id="vendor-review-version-select"
+                        value={selectedVendorReviewVersion?.id ?? ""}
+                        onChange={(event) => setVendorReviewVersionId(event.target.value)}
+                      >
+                        {proofVersions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            {formatVersionLabel(version)} · {new Date(version.created_at).toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <p className="version-meta">
+                      Snapshot: <strong>{summarizeProofVersion(selectedVendorReviewVersion ?? latestProofVersion)}</strong>
+                    </p>
+                    <p className="guide-more">
+                      This review stays tied to the selected proof snapshot even if the working draft changes later.
+                    </p>
+
+                    {selectedVendorReview ? (
+                      <>
+                        <div className="guide-card-top">
+                          <strong>{vendorReviewStatusLabels[selectedVendorReview.status]}</strong>
+                          <span className="severity-pill">{vendorReviewStatusLabels[selectedVendorReview.status]}</span>
+                        </div>
+
+                        <p className="version-meta">
+                          Created {new Date(selectedVendorReview.createdAt).toLocaleString()} ·{" "}
+                          Updated {new Date(selectedVendorReview.updatedAt).toLocaleString()}
+                        </p>
+
+                        <p className="vendor-review-status-copy">
+                          {selectedVendorReview.status === "revoked"
+                            ? "This review has been revoked and remains in local history."
+                            : isVendorReviewReady(selectedVendorReview)
+                              ? "Ready for production prep means the proof has been reviewed. It does not create engraving files or lock production."
+                              : "Keep checking items carefully before marking the review ready for production prep."}
+                        </p>
+
+                        <label className="field" htmlFor="vendor-reviewer-label">
+                          <span>Reviewed by</span>
+                          <select
+                            id="vendor-reviewer-label"
+                            value={selectedVendorReview.reviewedByLabel}
+                            onChange={(event) =>
+                              updateVendorReviewLabel(event.target.value as "Local reviewer" | "Staff")
+                            }
+                            disabled={selectedVendorReview.status === "revoked"}
+                          >
+                            <option value="Staff">Staff</option>
+                            <option value="Local reviewer">Local reviewer</option>
+                          </select>
+                        </label>
+
+                        <div className="vendor-review-checklist">
+                          {vendorReviewChecklistOrder.map((key) => (
+                            <label key={key} className="vendor-review-check-item" htmlFor={`vendor-review-check-${key}`}>
+                              <input
+                                id={`vendor-review-check-${key}`}
+                                type="checkbox"
+                                checked={selectedVendorReview.checklist.find((item) => item.key === key)?.checked ?? false}
+                                onChange={(event) => setVendorReviewChecklistItem(key, event.target.checked)}
+                                disabled={selectedVendorReview.status === "revoked"}
+                              />
+                              <span>{vendorReviewChecklistLabels[key]}</span>
+                            </label>
+                          ))}
+                        </div>
+
+                        <label className="field" htmlFor="vendor-review-notes">
+                          <span>Production notes</span>
+                          <textarea
+                            id="vendor-review-notes"
+                            rows={4}
+                            value={selectedVendorReview.notes}
+                            onChange={(event) => updateVendorReviewNotes(event.target.value)}
+                            placeholder="Record what still needs to be checked."
+                            disabled={selectedVendorReview.status === "revoked"}
+                          />
+                        </label>
+
+                        <div className="proof-actions">
+                        <button
+                          type="button"
+                          className="proof-button"
+                          onClick={markCurrentVendorReviewReady}
+                          disabled={
+                            selectedVendorReview.status === "revoked" ||
+                            selectedVendorReview.status === "ready_for_production_prep" ||
+                            !isVendorReviewReady(selectedVendorReview)
+                          }
+                        >
+                          Ready for production prep
+                        </button>
+                          <p className={`proof-toast proof-toast-${vendorReviewToast.tone}`}>{vendorReviewToast.message}</p>
+                        </div>
+
+                        <label className="field" htmlFor={`vendor-review-revoke-${selectedVendorReview.id}`}>
+                          <span>Revoke reason</span>
+                          <textarea
+                            id={`vendor-review-revoke-${selectedVendorReview.id}`}
+                            rows={2}
+                            value={vendorReviewRevocationReasons[selectedVendorReview.id] ?? ""}
+                            onChange={(event) =>
+                              setVendorReviewRevocationReasons((current) => ({
+                                ...current,
+                                [selectedVendorReview.id]: event.target.value,
+                              }))
+                            }
+                            placeholder="Explain why this review is being revoked."
+                            disabled={selectedVendorReview.status === "revoked"}
+                          />
+                        </label>
+
+                        <div className="review-note-actions">
+                          <button
+                            type="button"
+                            className="guide-focus-button"
+                            onClick={() => revokeCurrentVendorReview(selectedVendorReview)}
+                            disabled={selectedVendorReview.status === "revoked"}
+                          >
+                            Revoke review
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="proof-actions">
+                        <p className="guide-empty">No vendor review has been started for this proof version yet.</p>
+                        <button type="button" className="proof-button" onClick={startVendorReview}>
+                          Start vendor review
+                        </button>
+                        <p className={`proof-toast proof-toast-${vendorReviewToast.tone}`}>{vendorReviewToast.message}</p>
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="vendor-review-version-list">
+                    <div className="guide-header">
+                      <div>
+                        <p className="panel-kicker">Review history</p>
+                        <h4>Saved vendor reviews by proof version</h4>
+                      </div>
+                      <p className="guide-note">Snapshot history</p>
+                    </div>
+
+                    {vendorReviews.length === 0 ? (
+                      <p className="guide-empty">
+                        No local vendor reviews yet. Start one after confirming the proof snapshot you want to review.
+                      </p>
+                    ) : (
+                      proofVersions.map((version) => {
+                        const reviewsForVersion = listVendorReviewsForVersion(vendorReviews, version.id);
+                        if (reviewsForVersion.length === 0) {
+                          return null;
+                        }
+
+                        const latestReviewForVersion = getLatestVendorReviewForVersion(vendorReviews, version.id);
+                        const isLatestVersion = latestProofVersion?.id === version.id;
+
+                        return (
+                          <section key={version.id} className="vendor-review-version-card">
+                            <div className="guide-card-top">
+                              <strong>{formatVersionLabel(version)}</strong>
+                              <span className="severity-pill">{reviewsForVersion.length}</span>
+                            </div>
+                            <p className="version-meta">
+                              {new Date(version.created_at).toLocaleString()}
+                              {isLatestVersion ? " · Latest proof version" : " · Earlier proof version"}
+                            </p>
+                            <p className="guide-more">
+                              {isLatestVersion
+                                ? "This review history belongs to the latest proof snapshot."
+                                : "This review history stays attached to the earlier proof snapshot."}
+                            </p>
+                            {latestReviewForVersion ? (
+                              <article className="vendor-review-card">
+                                <div className="guide-card-top">
+                                  <strong>{vendorReviewStatusLabels[latestReviewForVersion.status]}</strong>
+                                  <span className="severity-pill">{vendorReviewStatusLabels[latestReviewForVersion.status]}</span>
+                                </div>
+                                <p className="version-meta">
+                                  {latestReviewForVersion.reviewedByLabel} ·{" "}
+                                  {new Date(latestReviewForVersion.updatedAt).toLocaleString()}
+                                </p>
+                                <p className="vendor-review-status-copy">
+                                  {latestReviewForVersion.status === "revoked"
+                                    ? "Revoked reviews are kept in local history."
+                                    : latestReviewForVersion.status === "ready_for_production_prep"
+                                      ? "Ready for production prep means the proof has been reviewed. It does not create engraving files or lock production."
+                                      : "This review is still in local production-prep review."}
+                                </p>
+                                <p className="vendor-review-notes">{latestReviewForVersion.notes || "No local notes yet."}</p>
+                              </article>
+                            ) : null}
+                          </section>
+                        );
+                      })
+                    )}
+
+                    {latestVendorReviewForLatestProofVersion &&
+                    latestVendorReviewForLatestProofVersion.status === "revoked" ? (
+                      <p className="guide-more">
+                        The latest proof version has a revoked vendor review on file. The snapshot stays available for history.
+                      </p>
+                    ) : null}
+                  </section>
+                </>
+              ) : (
+                <p className="guide-empty">Create a proof version before starting vendor production review.</p>
               )}
             </section>
 

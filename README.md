@@ -155,6 +155,18 @@ The editor can capture a local family approval record for a specific proof versi
 
 That storage is temporary. A future database-backed approval store should preserve the same version IDs, acknowledgment text, timestamps, and revocation history so the approval trail stays auditable.
 
+## Vendor production review
+
+The editor can capture a local vendor production review checklist for a specific proof version.
+
+- The review is attached to a proof version snapshot, not the mutable working draft.
+- It checks family approval, spelling, dates, epitaph, layout, margins, artwork, material size, production method, and proof PDF readiness.
+- `ready_for_production_prep` means the proof has been reviewed. It does not create engraving files, lock production, or export production-ready output.
+- The browser stores vendor reviews in `localStorage` for now, alongside the draft, proof history, notes, and family approval records.
+- A future production package export should require both family approval and vendor review readiness before it can proceed.
+
+That storage is temporary. A future database-backed vendor review store should preserve the same version IDs, checklist state, notes, timestamps, and revocation history so production-prep audit history stays intact.
+
 ## Future persistence
 
 When the database layer is added, it should adapt to the same core contract instead of inventing a new one.
@@ -165,6 +177,7 @@ When the database layer is added, it should adapt to the same core contract inst
 - Autosave recovery and server-side persistence should both rely on the same validation rules.
 - Note storage should preserve version IDs and diff references instead of flattening them away.
 - Approval storage should preserve version IDs, acknowledgment snapshots, timestamps, and revocation history instead of recreating approval records from the draft.
+- Vendor review storage should preserve version IDs, checklist booleans, notes, timestamps, and revocation history instead of turning the checklist into a freeform note.
 
 ## Design Guide Agent
 

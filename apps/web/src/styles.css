@@ -378,7 +378,25 @@ select {
   gap: 0.9rem;
 }
 
+.vendor-review-panel {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.66);
+  display: grid;
+  gap: 0.9rem;
+}
+
 .family-approval-form {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.vendor-review-form {
   border: 1px solid rgba(77, 55, 41, 0.1);
   border-radius: 1rem;
   padding: 0.85rem 0.95rem;
@@ -394,6 +412,13 @@ select {
   align-items: end;
 }
 
+.vendor-review-form-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
 .family-approval-form h4 {
   margin: 0;
 }
@@ -402,6 +427,59 @@ select {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.8rem;
+}
+
+.vendor-review-warning {
+  margin: 0;
+  color: #7f4f2e;
+  background: rgba(168, 123, 61, 0.09);
+  border: 1px solid rgba(168, 123, 61, 0.18);
+  border-radius: 0.9rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.vendor-review-checklist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.8rem;
+}
+
+.vendor-review-check-item {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: start;
+  line-height: 1.4;
+  color: #4d4037;
+}
+
+.vendor-review-status-copy,
+.vendor-review-notes {
+  margin: 0;
+  line-height: 1.5;
+  color: #5b4d44;
+}
+
+.vendor-review-version-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.vendor-review-version-card {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.88);
+  display: grid;
+  gap: 0.65rem;
+}
+
+.vendor-review-card {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 0.95rem;
+  padding: 0.8rem 0.9rem;
+  background: rgba(250, 247, 242, 0.92);
+  display: grid;
+  gap: 0.45rem;
 }
 
 .approval-ack-list {
@@ -858,12 +936,14 @@ select {
 
   .review-note-form-header,
   .family-approval-form-header,
+  .vendor-review-form-header,
   .diff-card-footer {
     align-items: start;
     flex-direction: column;
   }
 
   .family-approval-grid,
+  .vendor-review-checklist,
   .approval-ack-list-compact {
     grid-template-columns: 1fr;
   }
