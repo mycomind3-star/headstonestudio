@@ -132,6 +132,17 @@ Local review notes can be attached to proof versions and, when useful, to specif
 
 That storage is temporary. A future database-backed note store should preserve the same version IDs and diff references so review history stays auditable without changing the note model.
 
+## Family proof approval
+
+The editor can capture a local family approval record for a specific proof version.
+
+- The approval is attached to a proof version, not the mutable working draft.
+- It records the approver name, role label, approval snapshot text, and required acknowledgments for spelling, dates, epitaph, and production understanding.
+- It is not vendor review, production lock, payment, or production export.
+- The browser stores approval records in `localStorage` for now.
+
+That storage is temporary. A future database-backed approval store should preserve the same version IDs, acknowledgment text, timestamps, and revocation history so the approval trail stays auditable.
+
 ## Future persistence
 
 When the database layer is added, it should adapt to the same core contract instead of inventing a new one.
@@ -141,6 +152,7 @@ When the database layer is added, it should adapt to the same core contract inst
 - Version rows should snapshot the full design document exactly as the core contract creates it.
 - Autosave recovery and server-side persistence should both rely on the same validation rules.
 - Note storage should preserve version IDs and diff references instead of flattening them away.
+- Approval storage should preserve version IDs, acknowledgment snapshots, timestamps, and revocation history instead of recreating approval records from the draft.
 
 ## Design Guide Agent
 

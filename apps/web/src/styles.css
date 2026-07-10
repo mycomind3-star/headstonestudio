@@ -369,6 +369,125 @@ select {
   gap: 0.55rem;
 }
 
+.family-approval-panel {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.64);
+  display: grid;
+  gap: 0.9rem;
+}
+
+.family-approval-form {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 0.8rem;
+}
+
+.family-approval-form-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.family-approval-form h4 {
+  margin: 0;
+}
+
+.family-approval-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.approval-ack-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.approval-ack-list-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem 0.65rem;
+}
+
+.approval-ack-item {
+  display: inline-flex;
+  gap: 0.55rem;
+  align-items: start;
+  line-height: 1.4;
+  color: #4d4037;
+}
+
+.approval-ack-chip {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem;
+  background: rgba(255, 255, 255, 0.94);
+  color: #5c4b3f;
+  font-size: 0.78rem;
+}
+
+.approval-summary {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.approval-list,
+.approval-version-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.approval-version-card {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1rem;
+  padding: 0.85rem 0.95rem;
+  background: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 0.7rem;
+}
+
+.approval-record-stack {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.approval-card {
+  border-radius: 0.95rem;
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  padding: 0.8rem 0.9rem;
+  background: rgba(250, 247, 242, 0.92);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.approval-card p {
+  margin: 0;
+  line-height: 1.5;
+  color: #594c43;
+}
+
+.approval-card-active {
+  border-color: rgba(115, 139, 106, 0.18);
+}
+
+.approval-card-revoked {
+  opacity: 0.88;
+}
+
+.approval-snapshot,
+.approval-revocation {
+  font-size: 0.92rem;
+  color: #6a5b51;
+}
+
 .version-list {
   margin: 0;
   padding: 0;
@@ -607,8 +726,14 @@ select {
   }
 
   .review-note-form-header,
+  .family-approval-form-header,
   .diff-card-footer {
     align-items: start;
     flex-direction: column;
+  }
+
+  .family-approval-grid,
+  .approval-ack-list-compact {
+    grid-template-columns: 1fr;
   }
 }

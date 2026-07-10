@@ -1,22 +1,30 @@
 import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
 import {
   createDraft,
+  createProofApprovalRecord,
   createProofReviewNote,
   createVersion,
   compareDesignVersions,
   compareDraftToLatestVersion,
   dismissProofReviewNote,
   recoverDraftAutosave,
+  recoverProofApprovals,
   recoverProofReviewNotes,
   serializeDraftAutosave,
+  serializeProofApprovals,
   serializeProofReviewNotes,
   listOpenReviewNotes,
+  listActiveProofApprovals,
+  listApprovalsForVersion,
   listReviewNotesForVersion,
   resolveProofReviewNote,
+  revokeProofApprovalRecord,
   updateDraft,
   type DesignDraft,
   type DesignVersion,
+  type CreateProofApprovalInput,
   type CreateProofReviewNoteInput,
+  type ProofApprovalRecord,
   type ProofReviewNote,
   type ProofReviewNoteType,
   type ProofVersionDiffField,
@@ -29,6 +37,7 @@ import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
 const REVIEW_NOTES_STORAGE_KEY = "headstone-design-studio:review-notes:v1";
+const FAMILY_APPROVALS_STORAGE_KEY = "headstone-design-studio:family-proof-approvals:v1";
 
 function createWorkingDraft(): DesignDraft {
   const now = new Date().toISOString();
@@ -89,6 +98,19 @@ interface ReviewNoteDraft {
   diffField: ProofVersionDiffField | null;
 }
 
+interface ApprovalDraft {
+  approverName: string;
+  approverRoleLabel: "Family reviewer" | "Authorized reviewer";
+  createdByLabel: "Local reviewer" | "Staff";
+  acknowledgments: {
+    name_spelling_reviewed: boolean;
+    birth_date_reviewed: boolean;
+    death_date_reviewed: boolean;
+    epitaph_reviewed: boolean;
+    understands_not_production_approval: boolean;
+  };
+}
+
 const findingFocusMap: Record<string, ReviewFocusAction | null> = {
   "missing-name": { target: "name", label: "Review name" },
   "missing-birth-date": { target: "birth_date", label: "Review birth date" },
@@ -121,6 +143,22 @@ const reviewNoteFieldLabels: Record<ProofVersionDiffField, string> = {
   custom_art: "Custom art",
   border: "Border",
 };
+
+const approvalAcknowledgmentLabels: Record<keyof ApprovalDraft["acknowledgments"], string> = {
+  name_spelling_reviewed: "Name spelling reviewed",
+  birth_date_reviewed: "Birth date reviewed",
+  death_date_reviewed: "Death date reviewed",
+  epitaph_reviewed: "Epitaph reviewed",
+  understands_not_production_approval: "Understands this is not production approval",
+};
+
+const approvalAcknowledgmentOrder: (keyof ApprovalDraft["acknowledgments"])[] = [
+  "name_spelling_reviewed",
+  "birth_date_reviewed",
+  "death_date_reviewed",
+  "epitaph_reviewed",
+  "understands_not_production_approval",
+];
 
 function getReviewNoteTypeForField(field: ProofVersionDiffField): ProofReviewNoteType {
   switch (field) {
@@ -158,6 +196,21 @@ function createDefaultReviewNoteDraft(): ReviewNoteDraft {
   };
 }
 
+function createDefaultApprovalDraft(): ApprovalDraft {
+  return {
+    approverName: "",
+    approverRoleLabel: "Family reviewer",
+    createdByLabel: "Local reviewer",
+    acknowledgments: {
+      name_spelling_reviewed: false,
+      birth_date_reviewed: false,
+      death_date_reviewed: false,
+      epitaph_reviewed: false,
+      understands_not_production_approval: false,
+    },
+  };
+}
+
 function getReviewActionForFinding(finding: AgentFinding): ReviewFocusAction | null {
   return findingFocusMap[finding.id] ?? null;
 }
@@ -182,6 +235,15 @@ export function App() {
     message: "Local review notes stay with this browser.",
   });
   const [reviewNoteDraft, setReviewNoteDraft] = useState<ReviewNoteDraft>(() => createDefaultReviewNoteDraft());
+  const [approvalRecords, setApprovalRecords] = useState<ProofApprovalRecord[]>([]);
+  const [approvalHydrated, setApprovalHydrated] = useState(false);
+  const [approvalRecoveryNotice, setApprovalRecoveryNotice] = useState<string | null>(null);
+  const [approvalToast, setApprovalToast] = useState<ReviewNoteToast>({
+    tone: "idle",
+    message: "Local family approvals stay with this browser.",
+  });
+  const [approvalDraft, setApprovalDraft] = useState<ApprovalDraft>(() => createDefaultApprovalDraft());
+  const [revocationReasons, setRevocationReasons] = useState<Record<string, string>>({});
   const [comparisonVersionId, setComparisonVersionId] = useState<string | null>(null);
   const fieldRefs = useRef<FieldRefs>({
     template: null,
@@ -236,6 +298,28 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem(FAMILY_APPROVALS_STORAGE_KEY);
+
+    if (raw === null) {
+      setApprovalRecords([]);
+      setApprovalRecoveryNotice(null);
+      setApprovalHydrated(true);
+      return;
+    }
+
+    const recovered = recoverProofApprovals(raw, FAMILY_APPROVALS_STORAGE_KEY);
+    if (recovered.ok) {
+      setApprovalRecords(recovered.approvals);
+      setApprovalRecoveryNotice(null);
+    } else {
+      setApprovalRecords([]);
+      setApprovalRecoveryNotice(recovered.message);
+    }
+
+    setApprovalHydrated(true);
+  }, []);
+
+  useEffect(() => {
     if (!hydrated) {
       return;
     }
@@ -251,6 +335,14 @@ export function App() {
 
     window.localStorage.setItem(REVIEW_NOTES_STORAGE_KEY, serializeProofReviewNotes(reviewNotes));
   }, [reviewNotes, reviewNotesHydrated]);
+
+  useEffect(() => {
+    if (!approvalHydrated) {
+      return;
+    }
+
+    window.localStorage.setItem(FAMILY_APPROVALS_STORAGE_KEY, serializeProofApprovals(approvalRecords));
+  }, [approvalHydrated, approvalRecords]);
 
   useEffect(() => {
     if (focusCue === null) {
@@ -304,6 +396,10 @@ export function App() {
   const latestProofVersionNumber = latestProofVersion?.version_number ?? null;
   const proofVersions = [...draft.versions].reverse();
   const canCreateProofVersion = draft.status !== "production_locked" && draft.status !== "archived";
+  const latestVersionApprovals = latestProofVersion
+    ? listApprovalsForVersion(approvalRecords, latestProofVersion.id)
+    : [];
+  const latestVersionActiveApprovals = listActiveProofApprovals(latestVersionApprovals);
   const comparisonVersion = comparisonVersionId
     ? draft.versions.find((version) => version.id === comparisonVersionId) ?? null
     : null;
@@ -454,6 +550,95 @@ export function App() {
     setReviewNoteToast({
       tone: "saved",
       message: nextStatus === "resolved" ? "Marked the note resolved." : "Marked the note dismissed.",
+    });
+  }
+
+  function buildApprovalTextSnapshot(version: DesignVersion): string {
+    return `${formatVersionLabel(version)} · ${summarizeProofVersion(version)}`;
+  }
+
+  function submitFamilyApproval() {
+    if (!latestProofVersion) {
+      setApprovalToast({
+        tone: "error",
+        message: "Create a proof version before recording family approval.",
+      });
+      return;
+    }
+
+    const approverName = approvalDraft.approverName.trim();
+    if (approverName.length === 0) {
+      setApprovalToast({
+        tone: "error",
+        message: "Enter the approver name before saving this approval.",
+      });
+      return;
+    }
+
+    const acknowledgments = approvalDraft.acknowledgments;
+    const allAcknowledged = approvalAcknowledgmentOrder.every((key) => acknowledgments[key]);
+    if (!allAcknowledged) {
+      setApprovalToast({
+        tone: "error",
+        message: "Check every acknowledgment before saving this approval.",
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const approvalInput: CreateProofApprovalInput = {
+      id: `approval_${now.replaceAll(/[-:.TZ]/g, "")}`,
+      versionId: latestProofVersion.id,
+      approverName,
+      approverRoleLabel: approvalDraft.approverRoleLabel,
+      approvedAt: now,
+      approvalTextSnapshot: buildApprovalTextSnapshot(latestProofVersion),
+      acknowledgments: {
+        name_spelling_reviewed: true,
+        birth_date_reviewed: true,
+        death_date_reviewed: true,
+        epitaph_reviewed: true,
+        understands_not_production_approval: true,
+      },
+      createdByLabel: approvalDraft.createdByLabel,
+    };
+
+    const approval = createProofApprovalRecord(approvalInput);
+    setApprovalRecords((current) => [approval, ...current]);
+    setApprovalDraft((current) => ({
+      ...current,
+      acknowledgments: createDefaultApprovalDraft().acknowledgments,
+    }));
+    setApprovalToast({
+      tone: "saved",
+      message: "Saved a local family approval for the latest proof version.",
+    });
+  }
+
+  function revokeFamilyApproval(record: ProofApprovalRecord) {
+    const reason = revocationReasons[record.id]?.trim() ?? "";
+    if (reason.length === 0) {
+      setApprovalToast({
+        tone: "error",
+        message: "Enter a reason before revoking this approval.",
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const revoked = revokeProofApprovalRecord(record, {
+      revokedAt: now,
+      revokedReason: reason,
+    });
+
+    setApprovalRecords((current) => current.map((item) => (item.id === revoked.id ? revoked : item)));
+    setRevocationReasons((current) => ({
+      ...current,
+      [record.id]: "",
+    }));
+    setApprovalToast({
+      tone: "saved",
+      message: "Revoked the local family approval.",
     });
   }
 
@@ -1014,6 +1199,257 @@ export function App() {
                                 <p className="review-note-source">Linked to diff item {note.diffItemId}</p>
                               ) : null}
                               <p className="guide-more">This note is closed and kept in local history.</p>
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="family-approval-panel">
+              <div className="guide-header">
+                <div>
+                  <p className="panel-kicker">Family proof approval</p>
+                  <h4>Local approval capture</h4>
+                </div>
+                <p className="guide-note">Local only, not production</p>
+              </div>
+
+              <p className="guide-summary">
+                This records family review of this proof version only. Vendor review is still required before production.
+              </p>
+
+              {approvalRecoveryNotice ? <p className="error-copy">{approvalRecoveryNotice}</p> : null}
+
+              {latestProofVersion ? (
+                <section className="family-approval-form">
+                  <div className="family-approval-form-header">
+                    <div>
+                      <p className="panel-kicker">Approve version</p>
+                      <h4>{formatVersionLabel(latestProofVersion)}</h4>
+                    </div>
+                    <p className="guide-note">Current latest proof</p>
+                  </div>
+
+                  <p className="version-meta">
+                    Approval snapshot: <strong>{buildApprovalTextSnapshot(latestProofVersion)}</strong>
+                  </p>
+
+                  <div className="family-approval-grid">
+                    <label className="field" htmlFor="approval-approver-name">
+                      <span>Approver name</span>
+                      <input
+                        id="approval-approver-name"
+                        type="text"
+                        value={approvalDraft.approverName}
+                        onChange={(event) =>
+                          setApprovalDraft((current) => ({
+                            ...current,
+                            approverName: event.target.value,
+                          }))
+                        }
+                        placeholder="Enter the family reviewer name"
+                      />
+                    </label>
+
+                    <label className="field" htmlFor="approval-approver-role">
+                      <span>Approver role</span>
+                      <select
+                        id="approval-approver-role"
+                        value={approvalDraft.approverRoleLabel}
+                        onChange={(event) =>
+                          setApprovalDraft((current) => ({
+                            ...current,
+                            approverRoleLabel: event.target.value as ApprovalDraft["approverRoleLabel"],
+                          }))
+                        }
+                      >
+                        <option value="Family reviewer">Family reviewer</option>
+                        <option value="Authorized reviewer">Authorized reviewer</option>
+                      </select>
+                    </label>
+
+                    <label className="field" htmlFor="approval-created-by">
+                      <span>Recorded by</span>
+                      <select
+                        id="approval-created-by"
+                        value={approvalDraft.createdByLabel}
+                        onChange={(event) =>
+                          setApprovalDraft((current) => ({
+                            ...current,
+                            createdByLabel: event.target.value as ApprovalDraft["createdByLabel"],
+                          }))
+                        }
+                      >
+                        <option value="Local reviewer">Local reviewer</option>
+                        <option value="Staff">Staff</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div className="approval-ack-list">
+                    {approvalAcknowledgmentOrder.map((key) => (
+                      <label key={key} className="approval-ack-item" htmlFor={`approval-ack-${key}`}>
+                        <input
+                          id={`approval-ack-${key}`}
+                          type="checkbox"
+                          checked={approvalDraft.acknowledgments[key]}
+                          onChange={(event) =>
+                            setApprovalDraft((current) => ({
+                              ...current,
+                              acknowledgments: {
+                                ...current.acknowledgments,
+                                [key]: event.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>{approvalAcknowledgmentLabels[key]}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  <div className="proof-actions">
+                    <button
+                      type="button"
+                      className="proof-button"
+                      onClick={submitFamilyApproval}
+                      disabled={latestProofVersion === null}
+                    >
+                      Save local family approval
+                    </button>
+                    <p className={`proof-toast proof-toast-${approvalToast.tone}`}>{approvalToast.message}</p>
+                  </div>
+                </section>
+              ) : (
+                <p className="guide-empty">Create a proof version before recording family approval.</p>
+              )}
+
+              {latestVersionActiveApprovals.length > 0 ? (
+                <section className="approval-summary">
+                  <p className="guide-summary">
+                    Active approval on this proof version. It stays attached to this proof snapshot even if the draft changes later.
+                  </p>
+                  <ul className="approval-list">
+                    {latestVersionActiveApprovals.map((record) => (
+                      <li key={record.id} className="approval-card approval-card-active">
+                        <div className="guide-card-top">
+                          <strong>{record.approverName}</strong>
+                          <span className="severity-pill">{record.status}</span>
+                        </div>
+                        <p className="version-meta">
+                          {record.approverRoleLabel} · {new Date(record.approvedAt).toLocaleString()}
+                        </p>
+                        <p className="approval-snapshot">{record.approvalTextSnapshot}</p>
+                        <p className="approval-ack-copy">
+                          Name, date, and epitaph review were acknowledged, and this is not production approval.
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : latestProofVersion ? (
+                <p className="guide-empty">
+                  No active family approval has been saved for this proof version yet.
+                </p>
+              ) : null}
+
+              {approvalRecords.length === 0 ? (
+                <p className="guide-empty">
+                  No local family approvals yet. Add one only after a family review of the latest proof version.
+                </p>
+              ) : (
+                <div className="approval-version-list">
+                  {proofVersions.map((version) => {
+                    const approvalsForVersion = listApprovalsForVersion(approvalRecords, version.id);
+                    if (approvalsForVersion.length === 0) {
+                      return null;
+                    }
+
+                    const activeApprovals = listActiveProofApprovals(approvalsForVersion);
+                    const revokedApprovals = approvalsForVersion.filter((record) => record.status === "revoked");
+                    const isLatestVersion = latestProofVersion?.id === version.id;
+
+                    return (
+                      <section key={version.id} className="approval-version-card">
+                        <div className="guide-card-top">
+                          <strong>{formatVersionLabel(version)}</strong>
+                          <span className="severity-pill">{approvalsForVersion.length}</span>
+                        </div>
+                        <p className="version-meta">
+                          {new Date(version.created_at).toLocaleString()}
+                          {isLatestVersion ? " · Latest proof version" : " · Earlier proof version"}
+                        </p>
+                        {!isLatestVersion ? (
+                          <p className="guide-more">
+                            This approval belongs to an earlier proof snapshot, not the current draft.
+                          </p>
+                        ) : null}
+
+                        <div className="approval-record-stack">
+                          {activeApprovals.map((record) => (
+                            <article key={record.id} className="approval-card approval-card-active">
+                              <div className="guide-card-top">
+                                <strong>{record.approverName}</strong>
+                                <span className="severity-pill">{record.status}</span>
+                              </div>
+                              <p className="version-meta">
+                                {record.approverRoleLabel} · {record.createdByLabel} · {new Date(record.approvedAt).toLocaleString()}
+                              </p>
+                              <p className="approval-snapshot">{record.approvalTextSnapshot}</p>
+                              <div className="approval-ack-list approval-ack-list-compact">
+                                {approvalAcknowledgmentOrder.map((key) => (
+                                  <span key={key} className="approval-ack-chip">
+                                    {approvalAcknowledgmentLabels[key]}
+                                  </span>
+                                ))}
+                              </div>
+                              <label className="field" htmlFor={`revoke-reason-${record.id}`}>
+                                <span>Revoke reason</span>
+                                <textarea
+                                  id={`revoke-reason-${record.id}`}
+                                  rows={2}
+                                  value={revocationReasons[record.id] ?? ""}
+                                  onChange={(event) =>
+                                    setRevocationReasons((current) => ({
+                                      ...current,
+                                      [record.id]: event.target.value,
+                                    }))
+                                  }
+                                  placeholder="Explain why this approval is being revoked."
+                                />
+                              </label>
+                              <div className="review-note-actions">
+                                <button
+                                  type="button"
+                                  className="guide-focus-button"
+                                  onClick={() => revokeFamilyApproval(record)}
+                                >
+                                  Revoke approval
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+
+                          {revokedApprovals.map((record) => (
+                            <article key={record.id} className="approval-card approval-card-revoked">
+                              <div className="guide-card-top">
+                                <strong>{record.approverName}</strong>
+                                <span className="severity-pill">{record.status}</span>
+                              </div>
+                              <p className="version-meta">
+                                {record.approverRoleLabel} · {record.createdByLabel} · {new Date(record.approvedAt).toLocaleString()}
+                              </p>
+                              <p className="approval-snapshot">{record.approvalTextSnapshot}</p>
+                              {record.revokedAt ? (
+                                <p className="approval-revocation">
+                                  Revoked {new Date(record.revokedAt).toLocaleString()}
+                                </p>
+                              ) : null}
+                              {record.revokedReason ? <p className="approval-revocation">{record.revokedReason}</p> : null}
                             </article>
                           ))}
                         </div>

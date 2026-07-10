@@ -30,6 +30,26 @@ export {
   type ProofVersionDiffSeverity,
 } from "./proofComparison";
 export {
+  createProofApprovalRecord,
+  createProofApprovalInputSchema,
+  hasActiveFamilyApprovalForVersion,
+  listActiveProofApprovals,
+  listApprovalsForVersion,
+  proofApprovalAcknowledgmentSchema,
+  proofApprovalRecordSchema,
+  proofApprovalStatusSchema,
+  recoverProofApprovals,
+  revokeProofApprovalInputSchema,
+  revokeProofApprovalRecord,
+  serializeProofApprovals,
+  type CreateProofApprovalInput,
+  type ProofApprovalAcknowledgment,
+  type ProofApprovalRecord,
+  type ProofApprovalStatus,
+  type ProofApprovalsEnvelope,
+  type RevokeProofApprovalInput,
+} from "./proofApprovals";
+export {
   createProofReviewNote,
   createProofReviewNoteInputSchema,
   dismissProofReviewNote,
