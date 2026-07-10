@@ -149,6 +149,16 @@ select {
   outline-offset: 1px;
 }
 
+.field-focused {
+  background: rgba(173, 155, 136, 0.1);
+  border-radius: 1rem;
+  padding: 0.15rem 0.15rem 0.2rem;
+  box-shadow: inset 0 0 0 1px rgba(173, 155, 136, 0.22);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
 .field-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -299,6 +309,26 @@ select {
   margin: 0.35rem 0 0;
   line-height: 1.5;
   color: #594c43;
+}
+
+.guide-focus-button {
+  margin-top: 0.7rem;
+  border: 1px solid rgba(77, 55, 41, 0.14);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #4f4138;
+  padding: 0.45rem 0.8rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.guide-focus-button:hover {
+  background: rgba(248, 244, 239, 0.98);
+}
+
+.guide-focus-button:focus-visible {
+  outline: 2px solid rgba(123, 101, 85, 0.32);
+  outline-offset: 2px;
 }
 
 .guide-card-top {

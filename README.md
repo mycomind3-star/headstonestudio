@@ -126,4 +126,6 @@ The web editor now combines manual memorial field editing, deterministic SVG pre
 - Editing the memorial fields updates the shared `design_document`.
 - The preview stays deterministic so the same draft always renders the same way.
 - The guide panel is read-only and advisory only.
+- Guide findings can now focus the related editor field for quick review.
 - It helps surface calm findings, next actions, and wording notes, but it does not approve production files.
+- Those focus actions are navigational only and never mutate the draft.

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { analyzeDesignDraft } from "@headstone/agent";
+import { analyzeDesignDraft, type AgentFinding } from "@headstone/agent";
 import { createDraft, recoverDraftAutosave, serializeDraftAutosave, updateDraft, type DesignDraft } from "@headstone/core";
 import { renderDesignDocumentToSvg } from "@headstone/render";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { type EditableFieldKey, buildEditableDocument, getEditableFields, getTemplateIndex, getTemplateTitle, memorialTemplates } from "./editorModel";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
@@ -27,6 +27,38 @@ function formatAutosaveStatus(
   return { tone, message };
 }
 
+type FocusTarget = EditableFieldKey | "template";
+
+interface FieldRefs {
+  template: HTMLSelectElement | null;
+  name: HTMLInputElement | null;
+  birth_date: HTMLInputElement | null;
+  death_date: HTMLInputElement | null;
+  epitaph: HTMLInputElement | null;
+}
+
+interface FocusCue {
+  target: FocusTarget;
+  token: number;
+}
+
+interface ReviewFocusAction {
+  target: FocusTarget;
+  label: string;
+}
+
+const findingFocusMap: Record<string, ReviewFocusAction | null> = {
+  "missing-name": { target: "name", label: "Review name" },
+  "missing-birth-date": { target: "birth_date", label: "Review birth date" },
+  "missing-death-date": { target: "death_date", label: "Review death date" },
+  "empty-epitaph": { target: "epitaph", label: "Review epitaph" },
+  "long-epitaph": { target: "epitaph", label: "Review epitaph" },
+};
+
+function getReviewActionForFinding(finding: AgentFinding): ReviewFocusAction | null {
+  return findingFocusMap[finding.id] ?? null;
+}
+
 export function App() {
   const [draft, setDraft] = useState<DesignDraft>(() => createWorkingDraft());
   const [hydrated, setHydrated] = useState(false);
@@ -34,6 +66,15 @@ export function App() {
     formatAutosaveStatus("idle", "Loading draft..."),
   );
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
+  const [focusCue, setFocusCue] = useState<FocusCue | null>(null);
+  const fieldRefs = useRef<FieldRefs>({
+    template: null,
+    name: null,
+    birth_date: null,
+    death_date: null,
+    epitaph: null,
+  });
+  const focusTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -63,6 +104,28 @@ export function App() {
     setAutosaveStatus(formatAutosaveStatus("saved", "Saved locally."));
   }, [draft, hydrated]);
 
+  useEffect(() => {
+    if (focusCue === null) {
+      return;
+    }
+
+    if (focusTimerRef.current !== null) {
+      window.clearTimeout(focusTimerRef.current);
+    }
+
+    focusTimerRef.current = window.setTimeout(() => {
+      setFocusCue(null);
+      focusTimerRef.current = null;
+    }, 1400);
+
+    return () => {
+      if (focusTimerRef.current !== null) {
+        window.clearTimeout(focusTimerRef.current);
+        focusTimerRef.current = null;
+      }
+    };
+  }, [focusCue]);
+
   const templateIndex = getTemplateIndex(draft.design_document);
   const editorFields = getEditableFields(draft.design_document);
   const previewSvg = renderDesignDocumentToSvg(draft.design_document);
@@ -79,6 +142,19 @@ export function App() {
   const visibleAdvice = agentResponse.advice.slice(0, 2);
   const hiddenFindingCount = Math.max(0, agentResponse.findings.length - visibleFindings.length);
   const hiddenActionCount = Math.max(0, agentResponse.suggested_actions.length - visibleActions.length);
+
+  function focusTarget(target: FocusTarget) {
+    const element = fieldRefs.current[target];
+    if (element) {
+      element.focus({ preventScroll: true });
+      element.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+    }
+
+    setFocusCue({
+      target,
+      token: Date.now(),
+    });
+  }
 
   function updateField(field: EditableFieldKey, value: string) {
     const now = new Date().toISOString();
@@ -131,9 +207,13 @@ export function App() {
         <aside className="editor-panel">
           <section className="panel-block">
             <p className="panel-kicker">Template</p>
-            <label className="field">
+            <label className={`field ${focusCue?.target === "template" ? "field-focused" : ""}`} htmlFor="editor-template">
               <span>Design template</span>
               <select
+                id="editor-template"
+                ref={(node) => {
+                  fieldRefs.current.template = node;
+                }}
                 value={templateIndex}
                 onChange={(event) => {
                   changeTemplate(Number(event.target.value));
@@ -151,9 +231,13 @@ export function App() {
 
           <section className="panel-block">
             <p className="panel-kicker">Memorial text</p>
-            <label className="field">
+            <label className={`field ${focusCue?.target === "name" ? "field-focused" : ""}`} htmlFor="editor-name">
               <span>Person name</span>
               <input
+                id="editor-name"
+                ref={(node) => {
+                  fieldRefs.current.name = node;
+                }}
                 type="text"
                 value={editorFields.name}
                 onChange={(event) => updateField("name", event.target.value)}
@@ -162,9 +246,16 @@ export function App() {
             </label>
 
             <div className="field-row">
-              <label className="field">
+              <label
+                className={`field ${focusCue?.target === "birth_date" ? "field-focused" : ""}`}
+                htmlFor="editor-birth-date"
+              >
                 <span>Birth date</span>
                 <input
+                  id="editor-birth-date"
+                  ref={(node) => {
+                    fieldRefs.current.birth_date = node;
+                  }}
                   type="text"
                   value={editorFields.birth_date}
                   onChange={(event) => updateField("birth_date", event.target.value)}
@@ -172,9 +263,16 @@ export function App() {
                 />
               </label>
 
-              <label className="field">
+              <label
+                className={`field ${focusCue?.target === "death_date" ? "field-focused" : ""}`}
+                htmlFor="editor-death-date"
+              >
                 <span>Death date</span>
                 <input
+                  id="editor-death-date"
+                  ref={(node) => {
+                    fieldRefs.current.death_date = node;
+                  }}
                   type="text"
                   value={editorFields.death_date}
                   onChange={(event) => updateField("death_date", event.target.value)}
@@ -183,9 +281,13 @@ export function App() {
               </label>
             </div>
 
-            <label className="field">
+            <label className={`field ${focusCue?.target === "epitaph" ? "field-focused" : ""}`} htmlFor="editor-epitaph">
               <span>Epitaph line</span>
               <input
+                id="editor-epitaph"
+                ref={(node) => {
+                  fieldRefs.current.epitaph = node;
+                }}
                 type="text"
                 value={editorFields.epitaph}
                 onChange={(event) => updateField("epitaph", event.target.value)}
@@ -260,6 +362,22 @@ export function App() {
                         <span className="severity-pill">{finding.severity}</span>
                       </div>
                       <p>{finding.message}</p>
+                      {(() => {
+                        const reviewAction = getReviewActionForFinding(finding);
+                        if (!reviewAction) {
+                          return null;
+                        }
+
+                        return (
+                          <button
+                            type="button"
+                            className="guide-focus-button"
+                            onClick={() => focusTarget(reviewAction.target)}
+                          >
+                            {reviewAction.label}
+                          </button>
+                        );
+                      })()}
                     </li>
                   ))}
                 </ul>
