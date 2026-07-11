@@ -88,6 +88,7 @@ function formatAutosaveStatus(
 }
 
 type FocusTarget = EditableFieldKey | "template";
+type WorkflowTab = "guide" | "proofs" | "review" | "export";
 
 interface FieldRefs {
   template: HTMLSelectElement | null;
@@ -444,6 +445,7 @@ export function App() {
   );
   const [recoveryNotice, setRecoveryNotice] = useState<string | null>(null);
   const [focusCue, setFocusCue] = useState<FocusCue | null>(null);
+  const [workflowTab, setWorkflowTab] = useState<WorkflowTab>("guide");
   const [proofToast, setProofToast] = useState<ProofVersionToast>({
     tone: "idle",
     message: "Proof versions help preserve what was reviewed.",
@@ -1593,8 +1595,28 @@ export function App() {
           </p>
         </section>
 
-        <aside className="workflow-panel">
-          <section className="guide-panel">
+        <aside className="workflow-panel" data-workflow-tab={workflowTab}>
+          <div className="workflow-tabs" role="tablist" aria-label="Workflow sections">
+            {[
+              ["guide", "Guide"],
+              ["proofs", "Proofs"],
+              ["review", "Review"],
+              ["export", "Export"],
+            ].map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={workflowTab === tab}
+                className={`workflow-tab-button ${workflowTab === tab ? "workflow-tab-button-active" : ""}`}
+                onClick={() => setWorkflowTab(tab as WorkflowTab)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <section className="guide-panel workflow-tab-card workflow-tab-guide">
             <div className="guide-header">
               <div>
                 <p className="panel-kicker">Guidance</p>
@@ -1692,7 +1714,7 @@ export function App() {
             </section>
           </section>
 
-          <section className="proof-history-panel">
+          <section className="proof-history-panel workflow-tab-card workflow-tab-proofs">
             <div className="guide-header">
               <div>
                 <p className="panel-kicker">Proofs</p>
@@ -1771,45 +1793,54 @@ export function App() {
               )}
             </section>
 
-            {proofVersions.length === 0 ? (
-              <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
-            ) : (
-              <ul className="version-list">
-                {proofVersions.map((version) => {
-                  const isLatest = version.version_number === latestProofVersionNumber;
-                  return (
-                    <li key={version.id} className="version-card">
-                      <div className="guide-card-top">
-                        <strong>{formatVersionLabel(version)}</strong>
-                        <span className="severity-pill">{version.id.slice(0, 8)}</span>
-                      </div>
-                      <p className="version-meta">
-                        {new Date(version.created_at).toLocaleString()} {isLatest ? "· Latest proof version" : ""}
-                      </p>
-                      <p>{summarizeProofVersion(version)}</p>
-                      <button
-                        type="button"
-                        className="guide-focus-button"
-                        onClick={() => restoreProofVersion(version)}
-                      >
-                        Restore this version as working draft
-                      </button>
-                      {!isLatest ? (
+            <section className="workflow-proofs-stack workflow-tab-card workflow-tab-proofs">
+              {proofVersions.length === 0 ? (
+                <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
+              ) : (
+                <ul className="version-list">
+                  {proofVersions.map((version) => {
+                    const isLatest = version.version_number === latestProofVersionNumber;
+                    return (
+                      <li key={version.id} className="version-card">
+                        <div className="guide-card-top">
+                          <strong>{formatVersionLabel(version)}</strong>
+                          <span className="severity-pill">{version.id.slice(0, 8)}</span>
+                        </div>
+                        <p className="version-meta">
+                          {new Date(version.created_at).toLocaleString()} {isLatest ? "· Latest proof version" : ""}
+                        </p>
+                        <p>{summarizeProofVersion(version)}</p>
                         <button
                           type="button"
                           className="guide-focus-button"
-                          onClick={() => setComparisonVersionId(version.id)}
+                          onClick={() => restoreProofVersion(version)}
                         >
-                          Compare with latest proof
+                          Restore this version as working draft
                         </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        {!isLatest ? (
+                          <button
+                            type="button"
+                            className="guide-focus-button"
+                            onClick={() => setComparisonVersionId(version.id)}
+                          >
+                            Compare with latest proof
+                          </button>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
 
-            <section className="workflow-group">
+              <p className="guide-more">
+                Proof versions are local snapshots for review. They are not family approval and they do
+                not approve production.
+              </p>
+            </section>
+
+            </section>
+
+            <section className="workflow-group workflow-tab-card workflow-tab-review">
               <div className="workflow-group-header">
                 <div>
                   <p className="panel-kicker">Review</p>
@@ -2024,7 +2055,7 @@ export function App() {
               )}
             </section>
 
-            <section className="family-approval-panel">
+              <section className="family-approval-panel">
               <div className="guide-header">
                 <div>
                   <p className="panel-kicker">Family proof approval</p>
@@ -2275,7 +2306,7 @@ export function App() {
               )}
             </section>
 
-            <section className="vendor-review-panel">
+              <section className="vendor-review-panel">
               <div className="guide-header">
                 <div>
                   <p className="panel-kicker">Vendor production review</p>
@@ -2524,7 +2555,7 @@ export function App() {
 
             </section>
 
-            <section className="workflow-group">
+            <section className="workflow-group workflow-tab-card workflow-tab-export">
               <div className="workflow-group-header">
                 <div>
                   <p className="panel-kicker">Export</p>
@@ -2533,128 +2564,128 @@ export function App() {
                 <p className="guide-note">Separate from approval</p>
               </div>
 
-              <section className="proof-document-panel">
-              <div className="guide-header">
-                <div>
-                  <p className="panel-kicker">Proof document</p>
-                  <h4>{proofDocument?.title ?? "Memorial Design Proof"}</h4>
-                </div>
-                <p className="guide-note">Family review only</p>
-              </div>
-
-              <p className="guide-summary">
-                This printable proof uses one saved proof version snapshot. It stays separate from production approval.
-              </p>
-
-              {proofVersions.length > 0 ? (
-                <div className="proof-document-controls">
-                  <label className="field" htmlFor="proof-version-select">
-                    <span>Proof version</span>
-                    <select
-                      id="proof-version-select"
-                      value={selectedProofVersion?.id ?? ""}
-                      onChange={(event) => setProofVersionId(event.target.value)}
-                    >
-                      {proofVersions.map((version) => (
-                        <option key={version.id} value={version.id}>
-                          {formatVersionLabel(version)} · {new Date(version.created_at).toLocaleString()}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div className="proof-document-actions">
-                    <p className="version-meta">
-                      Suggested file name: <strong>{proofDocument?.fileName ?? "proof.pdf"}</strong>
-                    </p>
-                    <button
-                      type="button"
-                      className="proof-button"
-                      onClick={printProofDocument}
-                      disabled={proofDocument === null}
-                    >
-                      Print / Save as PDF
-                    </button>
+              <section className="proof-document-panel workflow-tab-card workflow-tab-proofs">
+                <div className="guide-header">
+                  <div>
+                    <p className="panel-kicker">Proof document</p>
+                    <h4>{proofDocument?.title ?? "Memorial Design Proof"}</h4>
                   </div>
+                  <p className="guide-note">Family review only</p>
                 </div>
-              ) : (
-                <p className="guide-empty">Create a proof version to prepare a printable review copy.</p>
-              )}
 
-              {proofDocument ? (
-                <article className="proof-document-page">
-                  <header className="proof-document-header">
-                    <div className="proof-document-header-copy">
-                      <p className="panel-kicker">Memorial Design Proof</p>
-                      <h4>{proofDocument.metadata.memorialName}</h4>
-                      <p className="version-meta">
-                        Proof version <strong>{proofDocument.metadata.proofVersionId}</strong> ·{" "}
-                        {proofDocument.metadata.proofVersionLabel} · Generated {proofDocument.metadata.generatedAtLabel}
-                      </p>
-                      <p className="version-meta">
-                        Suggested file name: <strong>{proofDocument.fileName}</strong>
-                      </p>
-                    </div>
-
-                    <dl className="proof-document-meta-grid">
-                      <div>
-                        <dt>Version ID</dt>
-                        <dd>{proofDocument.metadata.proofVersionId}</dd>
-                      </div>
-                      <div>
-                        <dt>Version time</dt>
-                        <dd>{proofDocument.metadata.proofVersionCreatedAtLabel}</dd>
-                      </div>
-                      <div>
-                        <dt>Generated</dt>
-                        <dd>{proofDocument.metadata.generatedAtLabel}</dd>
-                      </div>
-                      <div>
-                        <dt>Dimensions</dt>
-                        <dd>{proofDocument.metadata.dimensionsLabel}</dd>
-                      </div>
-                      <div>
-                        <dt>Material</dt>
-                        <dd>{proofDocument.metadata.material}</dd>
-                      </div>
-                      <div>
-                        <dt>Finish</dt>
-                        <dd>{proofDocument.metadata.finish}</dd>
-                      </div>
-                    </dl>
-                  </header>
-
-                  <section className="proof-document-summary">
-                    <div className="proof-document-summary-grid">
-                      <div>
-                        <p className="guide-note">Memorial name</p>
-                        <p className="version-meta">{proofDocument.metadata.memorialName}</p>
-                      </div>
-                      <div>
-                        <p className="guide-note">Birth date</p>
-                        <p className="version-meta">{proofDocument.metadata.birthDateText ?? "Not entered yet"}</p>
-                      </div>
-                      <div>
-                        <p className="guide-note">Death date</p>
-                        <p className="version-meta">{proofDocument.metadata.deathDateText ?? "Not entered yet"}</p>
-                      </div>
-                      <div>
-                        <p className="guide-note">Epitaph</p>
-                        <p className="version-meta">{proofDocument.metadata.epitaphText ?? "Not entered yet"}</p>
-                      </div>
-                    </div>
-                  </section>
-
-                  {proofDocument.sections.map((section) => renderProofDocumentSection(section))}
-                </article>
-              ) : (
-                <p className="guide-empty">
-                  No printable proof is available yet. Save a proof version first, then pick it here for review.
+                <p className="guide-summary">
+                  This printable proof uses one saved proof version snapshot. It stays separate from production approval.
                 </p>
-              )}
-            </section>
 
-            <section className="export-candidate-panel">
+                {proofVersions.length > 0 ? (
+                  <div className="proof-document-controls">
+                    <label className="field" htmlFor="proof-version-select">
+                      <span>Proof version</span>
+                      <select
+                        id="proof-version-select"
+                        value={selectedProofVersion?.id ?? ""}
+                        onChange={(event) => setProofVersionId(event.target.value)}
+                      >
+                        {proofVersions.map((version) => (
+                          <option key={version.id} value={version.id}>
+                            {formatVersionLabel(version)} · {new Date(version.created_at).toLocaleString()}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <div className="proof-document-actions">
+                      <p className="version-meta">
+                        Suggested file name: <strong>{proofDocument?.fileName ?? "proof.pdf"}</strong>
+                      </p>
+                      <button
+                        type="button"
+                        className="proof-button"
+                        onClick={printProofDocument}
+                        disabled={proofDocument === null}
+                      >
+                        Print / Save as PDF
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="guide-empty">Create a proof version to prepare a printable review copy.</p>
+                )}
+
+                {proofDocument ? (
+                  <article className="proof-document-page">
+                    <header className="proof-document-header">
+                      <div className="proof-document-header-copy">
+                        <p className="panel-kicker">Memorial Design Proof</p>
+                        <h4>{proofDocument.metadata.memorialName}</h4>
+                        <p className="version-meta">
+                          Proof version <strong>{proofDocument.metadata.proofVersionId}</strong> ·{" "}
+                          {proofDocument.metadata.proofVersionLabel} · Generated {proofDocument.metadata.generatedAtLabel}
+                        </p>
+                        <p className="version-meta">
+                          Suggested file name: <strong>{proofDocument.fileName}</strong>
+                        </p>
+                      </div>
+
+                      <dl className="proof-document-meta-grid">
+                        <div>
+                          <dt>Version ID</dt>
+                          <dd>{proofDocument.metadata.proofVersionId}</dd>
+                        </div>
+                        <div>
+                          <dt>Version time</dt>
+                          <dd>{proofDocument.metadata.proofVersionCreatedAtLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Generated</dt>
+                          <dd>{proofDocument.metadata.generatedAtLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Dimensions</dt>
+                          <dd>{proofDocument.metadata.dimensionsLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Material</dt>
+                          <dd>{proofDocument.metadata.material}</dd>
+                        </div>
+                        <div>
+                          <dt>Finish</dt>
+                          <dd>{proofDocument.metadata.finish}</dd>
+                        </div>
+                      </dl>
+                    </header>
+
+                    <section className="proof-document-summary">
+                      <div className="proof-document-summary-grid">
+                        <div>
+                          <p className="guide-note">Memorial name</p>
+                          <p className="version-meta">{proofDocument.metadata.memorialName}</p>
+                        </div>
+                        <div>
+                          <p className="guide-note">Birth date</p>
+                          <p className="version-meta">{proofDocument.metadata.birthDateText ?? "Not entered yet"}</p>
+                        </div>
+                        <div>
+                          <p className="guide-note">Death date</p>
+                          <p className="version-meta">{proofDocument.metadata.deathDateText ?? "Not entered yet"}</p>
+                        </div>
+                        <div>
+                          <p className="guide-note">Epitaph</p>
+                          <p className="version-meta">{proofDocument.metadata.epitaphText ?? "Not entered yet"}</p>
+                        </div>
+                      </div>
+                    </section>
+
+                    {proofDocument.sections.map((section) => renderProofDocumentSection(section))}
+                  </article>
+                ) : (
+                  <p className="guide-empty">
+                    No printable proof is available yet. Save a proof version first, then pick it here for review.
+                  </p>
+                )}
+              </section>
+
+              <section className="export-candidate-panel workflow-tab-card workflow-tab-export">
               <div className="guide-header">
                 <div>
                   <p className="panel-kicker">Laser/vector export candidate</p>
@@ -2718,12 +2749,10 @@ export function App() {
                 <p className="guide-empty">Create a proof version before exporting a local SVG candidate.</p>
               )}
             </section>
-            </section>
-
-            <p className="guide-more">
-              Proof versions are local snapshots for review. They are not family approval and they do
-              not approve production.
-            </p>
+              <p className="guide-more">
+                Proof versions are local snapshots for review. They are not family approval and they do
+                not approve production.
+              </p>
           </section>
         </aside>
       </section>

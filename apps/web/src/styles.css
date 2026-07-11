@@ -30,7 +30,7 @@ select {
 .studio-shell {
   min-height: 100vh;
   padding: 2rem;
-  max-width: 88rem;
+  max-width: 96rem;
   margin: 0 auto;
   display: grid;
   gap: 1.25rem;
@@ -99,7 +99,8 @@ select {
 
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(21rem, 23rem) minmax(0, 1.4fr) minmax(24rem, 27rem);
+  grid-template-columns: minmax(21rem, 23rem) minmax(0, 1.8fr) minmax(21rem, 24rem);
+  grid-template-areas: "editor canvas workflow";
   gap: 1.1rem;
   align-items: start;
 }
@@ -118,6 +119,7 @@ select {
   padding: 1.15rem;
   display: grid;
   gap: 1rem;
+  grid-area: editor;
 }
 
 .panel-group-header,
@@ -143,6 +145,7 @@ select {
   padding: 1.1rem;
   display: grid;
   gap: 1rem;
+  grid-area: workflow;
 }
 
 .workflow-group {
@@ -676,6 +679,7 @@ select {
   padding: 1.1rem;
   display: grid;
   gap: 0.9rem;
+  grid-area: canvas;
 }
 
 .preview-header {
@@ -686,7 +690,7 @@ select {
 }
 
 .preview-header h2 {
-  font-size: 1.35rem;
+  font-size: 1.6rem;
 }
 
 .preview-note {
@@ -700,7 +704,7 @@ select {
 }
 
 .preview-stage {
-  min-height: 38rem;
+  min-height: clamp(34rem, 58vh, 48rem);
   border-radius: 1.15rem;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 239, 231, 0.94)),
@@ -1095,6 +1099,82 @@ select {
   align-self: start;
 }
 
+.preview-footnote {
+  max-width: 52rem;
+}
+
+.workflow-tabs {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.35rem;
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 999px;
+  background: rgba(250, 247, 242, 0.9);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+}
+
+.workflow-tab-button {
+  flex: 1 1 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #5b4d44;
+  padding: 0.62rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.workflow-tab-button:hover {
+  background: rgba(255, 255, 255, 0.72);
+  color: #43362d;
+}
+
+.workflow-tab-button:focus-visible {
+  outline: 2px solid rgba(123, 101, 85, 0.32);
+  outline-offset: 2px;
+}
+
+.workflow-tab-button-active {
+  background: rgba(255, 255, 255, 0.96);
+  color: #2f251f;
+  box-shadow: 0 4px 12px rgba(67, 48, 36, 0.08);
+}
+
+.workflow-tab-card {
+  display: none !important;
+}
+
+.workflow-panel[data-workflow-tab="guide"] .workflow-tab-guide,
+.workflow-panel[data-workflow-tab="proofs"] .workflow-tab-proofs,
+.workflow-panel[data-workflow-tab="review"] .workflow-tab-review,
+.workflow-panel[data-workflow-tab="export"] .workflow-tab-export {
+  display: grid !important;
+}
+
+.workflow-panel[data-workflow-tab="proofs"] .workflow-tab-export > .workflow-group-header {
+  display: none;
+}
+
+.workflow-panel[data-workflow-tab="proofs"] .workflow-tab-export > .export-candidate-panel {
+  display: none !important;
+}
+
+.workflow-panel[data-workflow-tab="proofs"] .workflow-tab-export > .proof-document-panel {
+  display: grid !important;
+}
+
+.workflow-panel[data-workflow-tab="proofs"] .workflow-tab-export > .guide-more {
+  display: none;
+}
+
+.workflow-panel[data-workflow-tab="export"] .workflow-tab-export > .proof-document-panel {
+  display: none !important;
+}
+
 .workflow-panel .guide-panel,
 .workflow-panel .proof-history-panel,
 .workflow-panel .review-notes-panel,
@@ -1129,6 +1209,10 @@ select {
 
   .studio-grid {
     grid-template-columns: 1fr;
+    grid-template-areas:
+      "canvas"
+      "editor"
+      "workflow";
   }
 
   .review-note-grid,
@@ -1159,6 +1243,18 @@ select {
   .proof-document-summary-grid,
   .proof-document-meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .workflow-tabs {
+    position: sticky;
+    top: 0.75rem;
+    z-index: 2;
+    margin-bottom: 0.15rem;
+    background: rgba(248, 243, 236, 0.96);
+  }
+
+  .preview-stage {
+    min-height: 24rem;
   }
 }
 
