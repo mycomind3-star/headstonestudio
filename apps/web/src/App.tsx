@@ -60,6 +60,7 @@ import {
   updateEditableDocumentFields,
 } from "./canvasModel";
 import { formatVersionLabel, summarizeProofVersion } from "./versionModel";
+import { PhotoConverter } from "./PhotoConverter";
 
 const STORAGE_KEY = "headstone-design-studio:draft-autosave:v2";
 const REVIEW_NOTES_STORAGE_KEY = "headstone-design-studio:review-notes:v1";
@@ -1347,7 +1348,8 @@ export function App() {
 
       <section className="studio-grid">
         <aside className="editor-panel">
-          <div className="panel-group-header">
+          <PhotoConverter />
+      <div className="panel-group-header">
             <p className="panel-kicker">Design</p>
             <h2>Memorial fields</h2>
           </div>
