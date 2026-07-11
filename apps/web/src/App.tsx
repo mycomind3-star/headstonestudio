@@ -1345,6 +1345,11 @@ export function App() {
 
       <section className="studio-grid">
         <aside className="editor-panel">
+          <div className="panel-group-header">
+            <p className="panel-kicker">Design</p>
+            <h2>Memorial fields</h2>
+          </div>
+
           <section className="panel-block">
             <p className="panel-kicker">Template</p>
             <label className={`field ${focusCue?.target === "template" ? "field-focused" : ""}`} htmlFor="editor-template">
@@ -1465,36 +1470,44 @@ export function App() {
                     <span>Label</span>
                     <strong>{selectedCanvasElement.label}</strong>
                   </div>
-                  <label className="field" htmlFor="selected-element-x">
-                    <span>X position</span>
-                    <input
-                      id="selected-element-x"
-                      type="number"
-                      step="0.01"
-                      value={selectedCanvasElement.x.toFixed(2)}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        if (Number.isFinite(nextValue)) {
-                          moveSelectedCanvasElement(selectedCanvasElement.id, nextValue, selectedCanvasElement.y);
-                        }
-                      }}
-                    />
-                  </label>
-                  <label className="field" htmlFor="selected-element-y">
-                    <span>Y position</span>
-                    <input
-                      id="selected-element-y"
-                      type="number"
-                      step="0.01"
-                      value={selectedCanvasElement.y.toFixed(2)}
-                      onChange={(event) => {
-                        const nextValue = Number(event.target.value);
-                        if (Number.isFinite(nextValue)) {
-                          moveSelectedCanvasElement(selectedCanvasElement.id, selectedCanvasElement.x, nextValue);
-                        }
-                      }}
-                    />
-                  </label>
+                  <div className="canvas-inspector-position-group">
+                    <div className="canvas-inspector-position-header">
+                      <p className="panel-kicker">Position</p>
+                      <p className="guide-note">Use the preview or type exact values</p>
+                    </div>
+                    <div className="canvas-inspector-position-grid">
+                      <label className="field" htmlFor="selected-element-x">
+                        <span>X position</span>
+                        <input
+                          id="selected-element-x"
+                          type="number"
+                          step="0.01"
+                          value={selectedCanvasElement.x.toFixed(2)}
+                          onChange={(event) => {
+                            const nextValue = Number(event.target.value);
+                            if (Number.isFinite(nextValue)) {
+                              moveSelectedCanvasElement(selectedCanvasElement.id, nextValue, selectedCanvasElement.y);
+                            }
+                          }}
+                        />
+                      </label>
+                      <label className="field" htmlFor="selected-element-y">
+                        <span>Y position</span>
+                        <input
+                          id="selected-element-y"
+                          type="number"
+                          step="0.01"
+                          value={selectedCanvasElement.y.toFixed(2)}
+                          onChange={(event) => {
+                            const nextValue = Number(event.target.value);
+                            if (Number.isFinite(nextValue)) {
+                              moveSelectedCanvasElement(selectedCanvasElement.id, selectedCanvasElement.x, nextValue);
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                  </div>
                   <div className="canvas-inspector-readout">
                     <span>Width</span>
                     <strong>{selectedCanvasElement.width.toFixed(2)}</strong>
@@ -1553,11 +1566,11 @@ export function App() {
           </p>
         </aside>
 
-        <section className="preview-panel">
+        <section className="preview-panel canvas-panel">
           <div className="preview-header">
             <div>
-              <p className="panel-kicker">Preview</p>
-              <h2>Deterministic SVG</h2>
+              <p className="panel-kicker">Canvas</p>
+              <h2>Design canvas</h2>
             </div>
             <p className="preview-note">Not production-ready</p>
           </div>
@@ -1578,11 +1591,13 @@ export function App() {
             selected element. Proof versions preserve what was reviewed, and the production export
             will come later from the same shared document and render layer.
           </p>
+        </section>
 
+        <aside className="workflow-panel">
           <section className="guide-panel">
             <div className="guide-header">
               <div>
-                <p className="panel-kicker">Design Guide</p>
+                <p className="panel-kicker">Guidance</p>
                 <h3>Calm guidance</h3>
               </div>
               <p className="guide-note">Read only</p>
@@ -1680,7 +1695,7 @@ export function App() {
           <section className="proof-history-panel">
             <div className="guide-header">
               <div>
-                <p className="panel-kicker">Version history</p>
+                <p className="panel-kicker">Proofs</p>
                 <h3>Local proof versions</h3>
               </div>
               <p className="guide-note">Snapshot review only</p>
@@ -1756,12 +1771,59 @@ export function App() {
               )}
             </section>
 
-            <section
-              className="review-notes-panel"
-              ref={(node) => {
-                reviewNotesPanelRef.current = node;
-              }}
-            >
+            {proofVersions.length === 0 ? (
+              <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
+            ) : (
+              <ul className="version-list">
+                {proofVersions.map((version) => {
+                  const isLatest = version.version_number === latestProofVersionNumber;
+                  return (
+                    <li key={version.id} className="version-card">
+                      <div className="guide-card-top">
+                        <strong>{formatVersionLabel(version)}</strong>
+                        <span className="severity-pill">{version.id.slice(0, 8)}</span>
+                      </div>
+                      <p className="version-meta">
+                        {new Date(version.created_at).toLocaleString()} {isLatest ? "· Latest proof version" : ""}
+                      </p>
+                      <p>{summarizeProofVersion(version)}</p>
+                      <button
+                        type="button"
+                        className="guide-focus-button"
+                        onClick={() => restoreProofVersion(version)}
+                      >
+                        Restore this version as working draft
+                      </button>
+                      {!isLatest ? (
+                        <button
+                          type="button"
+                          className="guide-focus-button"
+                          onClick={() => setComparisonVersionId(version.id)}
+                        >
+                          Compare with latest proof
+                        </button>
+                      ) : null}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <section className="workflow-group">
+              <div className="workflow-group-header">
+                <div>
+                  <p className="panel-kicker">Review</p>
+                  <h3>Notes and approvals</h3>
+                </div>
+                <p className="guide-note">Local only</p>
+              </div>
+
+              <section
+                className="review-notes-panel"
+                ref={(node) => {
+                  reviewNotesPanelRef.current = node;
+                }}
+              >
               <div className="guide-header">
                 <div>
                   <p className="panel-kicker">Review notes</p>
@@ -2460,7 +2522,18 @@ export function App() {
               )}
             </section>
 
-            <section className="proof-document-panel">
+            </section>
+
+            <section className="workflow-group">
+              <div className="workflow-group-header">
+                <div>
+                  <p className="panel-kicker">Export</p>
+                  <h3>Print and candidate files</h3>
+                </div>
+                <p className="guide-note">Separate from approval</p>
+              </div>
+
+              <section className="proof-document-panel">
               <div className="guide-header">
                 <div>
                   <p className="panel-kicker">Proof document</p>
@@ -2645,50 +2718,14 @@ export function App() {
                 <p className="guide-empty">Create a proof version before exporting a local SVG candidate.</p>
               )}
             </section>
+            </section>
 
-            {proofVersions.length === 0 ? (
-              <p className="guide-empty">No proof versions yet. Save one to preserve the current draft for review.</p>
-            ) : (
-              <ul className="version-list">
-                {proofVersions.map((version) => {
-                  const isLatest = version.version_number === latestProofVersionNumber;
-                  return (
-                    <li key={version.id} className="version-card">
-                      <div className="guide-card-top">
-                        <strong>{formatVersionLabel(version)}</strong>
-                        <span className="severity-pill">{version.id.slice(0, 8)}</span>
-                      </div>
-                      <p className="version-meta">
-                        {new Date(version.created_at).toLocaleString()} {isLatest ? "· Latest proof version" : ""}
-                      </p>
-                      <p>{summarizeProofVersion(version)}</p>
-                      <button
-                        type="button"
-                        className="guide-focus-button"
-                        onClick={() => restoreProofVersion(version)}
-                      >
-                        Restore this version as working draft
-                      </button>
-                      {!isLatest ? (
-                        <button
-                          type="button"
-                          className="guide-focus-button"
-                          onClick={() => setComparisonVersionId(version.id)}
-                        >
-                          Compare with latest proof
-                        </button>
-                      ) : null}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
             <p className="guide-more">
               Proof versions are local snapshots for review. They are not family approval and they do
               not approve production.
             </p>
           </section>
-        </section>
+        </aside>
       </section>
     </main>
   );

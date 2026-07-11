@@ -99,13 +99,14 @@ select {
 
 .studio-grid {
   display: grid;
-  grid-template-columns: minmax(20rem, 22rem) minmax(0, 1fr);
-  gap: 1.25rem;
+  grid-template-columns: minmax(21rem, 23rem) minmax(0, 1.4fr) minmax(24rem, 27rem);
+  gap: 1.1rem;
   align-items: start;
 }
 
 .editor-panel,
-.preview-panel {
+.preview-panel,
+.workflow-panel {
   border: 1px solid rgba(77, 55, 41, 0.12);
   border-radius: 1.25rem;
   background: rgba(255, 255, 255, 0.75);
@@ -114,9 +115,39 @@ select {
 }
 
 .editor-panel {
-  padding: 1.25rem;
+  padding: 1.15rem;
   display: grid;
   gap: 1rem;
+}
+
+.panel-group-header,
+.workflow-group-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: end;
+}
+
+.panel-group-header h2,
+.workflow-group-header h3 {
+  margin: 0;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.panel-group-header {
+  padding-bottom: 0.15rem;
+}
+
+.workflow-panel {
+  padding: 1.1rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.workflow-group {
+  display: grid;
+  gap: 0.85rem;
 }
 
 .panel-block {
@@ -642,7 +673,7 @@ select {
 }
 
 .preview-panel {
-  padding: 1rem;
+  padding: 1.1rem;
   display: grid;
   gap: 0.9rem;
 }
@@ -669,13 +700,13 @@ select {
 }
 
 .preview-stage {
-  min-height: 34rem;
-  border-radius: 1rem;
+  min-height: 38rem;
+  border-radius: 1.15rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(245, 239, 231, 0.92)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 239, 231, 0.94)),
     radial-gradient(circle at 20% 20%, rgba(210, 199, 189, 0.3), transparent 24%);
   border: 1px solid rgba(77, 55, 41, 0.08);
-  padding: 1rem;
+  padding: 1.15rem;
   display: grid;
   place-items: center;
   overflow: auto;
@@ -750,6 +781,33 @@ select {
 }
 
 .canvas-inspector-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.canvas-inspector-position-group {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 0.95rem;
+  background: rgba(250, 247, 242, 0.94);
+  padding: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.canvas-inspector-position-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.canvas-inspector-position-header .panel-kicker {
+  margin-bottom: 0;
+}
+
+.canvas-inspector-position-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.7rem;
@@ -1033,6 +1091,35 @@ select {
   height: auto;
 }
 
+.canvas-panel {
+  align-self: start;
+}
+
+.workflow-panel .guide-panel,
+.workflow-panel .proof-history-panel,
+.workflow-panel .review-notes-panel,
+.workflow-panel .family-approval-panel,
+.workflow-panel .vendor-review-panel,
+.workflow-panel .proof-document-panel,
+.workflow-panel .export-candidate-panel {
+  border: 1px solid rgba(77, 55, 41, 0.1);
+  border-radius: 1.15rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 14px 36px rgba(67, 48, 36, 0.06);
+  display: grid;
+  gap: 0.95rem;
+}
+
+.workflow-panel .proof-diff-panel {
+  border: 1px solid rgba(77, 55, 41, 0.08);
+  border-radius: 1rem;
+  padding: 0.9rem;
+  background: rgba(255, 255, 255, 0.74);
+  display: grid;
+  gap: 0.85rem;
+}
+
 @media (max-width: 980px) {
   .studio-header,
   .preview-header {
@@ -1046,10 +1133,13 @@ select {
 
   .review-note-grid,
   .field-row,
-  .canvas-inspector-grid {
+  .canvas-inspector-grid,
+  .canvas-inspector-position-grid {
     grid-template-columns: 1fr;
   }
 
+  .panel-group-header,
+  .workflow-group-header,
   .review-note-form-header,
   .family-approval-form-header,
   .vendor-review-form-header,
